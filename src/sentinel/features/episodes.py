@@ -33,20 +33,36 @@ CONT_COLS = [c for c in VALUE_COLS if c != "vent"]  # vent is binary
 
 
 def _episode_ends(model: pd.DataFrame, fcfg: FeatureConfig) -> np.ndarray:
-    """End hour per stay: onset (positive) or length-matched pseudo-onset (control)."""
+    """End hour per stay.
+
+    Positives: end = onset (episode = last min(onset, max_obs) hours before it).
+    Controls: end = a pseudo length **sampled from the positives' episode-LENGTH
+    distribution, restricted to lengths feasible within the control's own LOS** —
+    this matches the full length *distribution* (not just the median), so episode
+    length cannot proxy the label even in the tails. Residual mismatch is bounded
+    by the (real, unchangeable) LOS difference between sick and well patients.
+    """
     rng = np.random.default_rng(fcfg.seed)
     is_pos = (model["label"] == 1).to_numpy()
     onset = model["onset_hour"].to_numpy()
     los_floor = np.floor(model["los_hours"].to_numpy()).astype(int)
-    pos_onsets = model.loc[model["label"] == 1, "onset_hour"].dropna().astype(int).to_numpy()
-    if len(pos_onsets) == 0:
-        pos_onsets = np.array([fcfg.max_obs_hours])
-    pseudo = rng.choice(pos_onsets, size=len(model))
-    # controls: pseudo-onset capped at LOS; positives: actual onset
-    end = np.where(is_pos, np.nan_to_num(onset, nan=fcfg.min_obs_hours),
-                   np.minimum(pseudo, los_floor)).astype(int)
-    lo = fcfg.min_obs_hours
-    end = np.clip(end, lo, np.maximum(los_floor, lo))
+
+    pos_onset = model.loc[model["label"] == 1, "onset_hour"].dropna().astype(int).to_numpy()
+    pos_len = np.minimum(pos_onset, fcfg.max_obs_hours)        # positive episode lengths
+    pos_len = pos_len[pos_len >= fcfg.min_obs_hours]
+    if len(pos_len) == 0:
+        pos_len = np.array([fcfg.min_obs_hours])
+    pos_sorted = np.sort(pos_len)
+
+    caps = np.clip(los_floor, fcfg.min_obs_hours, None)        # max feasible length / stay
+    k = np.searchsorted(pos_sorted, caps, side="right")        # feasible samples / stay
+    ridx = np.minimum((rng.random(len(model)) * np.maximum(k, 1)).astype(int),
+                      np.maximum(k - 1, 0))
+    sampled = np.where(k > 0, pos_sorted[ridx], caps)
+    sampled = np.minimum(sampled, caps)
+
+    end = np.where(is_pos, np.nan_to_num(onset, nan=fcfg.min_obs_hours).astype(int), sampled)
+    end = np.clip(end.astype(int), fcfg.min_obs_hours, np.maximum(los_floor, fcfg.min_obs_hours))
     return end
 
 
@@ -94,6 +110,10 @@ def assemble_and_write(cfg: CohortConfig, lcfg: LabelConfig, fcfg: FeatureConfig
     stats["age"] = {"mean": amu, "std": asd}
     df["age_z"] = ((df["age"] - amu) / asd).astype("float32")
     df["sex_female"] = (df["gender"] == "F").astype("int8")
+    # explicit, minimal shared time index (hours since admission, train-normalized)
+    hmu, hsd = float(df.loc[train, "hr"].mean()), float(df.loc[train, "hr"].std() or 1.0)
+    stats["hour_idx"] = {"mean": hmu, "std": hsd}
+    df["hour_idx"] = ((df["hr"] - hmu) / hsd).astype("float32")
 
     # --- per-organ feature manifest (for the Dec-POMDP agents) ---
     manifest: dict[str, list[str]] = {}
@@ -106,7 +126,10 @@ def assemble_and_write(cfg: CohortConfig, lcfg: LabelConfig, fcfg: FeatureConfig
             if fcfg.include_measurement_features and v in MEASURED_VARS:
                 cols += [f"{v}__measured", f"{v}__mask"]
         manifest[organ] = cols
-    manifest[SHARED_GROUP] = manifest.get(SHARED_GROUP, []) + ["age_z", "sex_female"]
+    # shared context is deliberately MINIMAL & explicit: demographics + time +
+    # temperature (a global vital owned by no single organ). No organ's detailed
+    # signal is shared, preserving agent specialization / interpretability.
+    manifest[SHARED_GROUP] = manifest.get(SHARED_GROUP, []) + ["age_z", "sex_female", "hour_idx"]
 
     keep = (["stay_id", "hr", "split", "label", "y", "t_to_onset", "end_hour"]
             + [c for cols in manifest.values() for c in cols])
@@ -130,9 +153,16 @@ def assemble_and_write(cfg: CohortConfig, lcfg: LabelConfig, fcfg: FeatureConfig
             ep = sub.groupby("stay_id")["label"].first()
             log.info("  %-9s %7s rows | %5d episodes (%4d pos) | %.1f%% positive hours",
                      s, f"{len(sub):,}", len(ep), int((ep == 1).sum()), 100 * sub["y"].mean())
-    # LOS-proxy guard: episode length by class should overlap
+    # LOS-proxy guard: episode-length DISTRIBUTION (not just median) by class
     elen = out.groupby("stay_id").agg(label=("label", "first"), n=("hr", "size"))
-    log.info("  episode length (hours): pos median=%.0f, ctrl median=%.0f (aligned)",
-             elen.loc[elen.label == 1, "n"].median(), elen.loc[elen.label == 0, "n"].median())
+    qs = [0.1, 0.25, 0.5, 0.75, 0.9, 0.99]
+    pq = elen.loc[elen.label == 1, "n"].quantile(qs).round(0).tolist()
+    cq = elen.loc[elen.label == 0, "n"].quantile(qs).round(0).tolist()
+    log.info("  episode length q%s: pos=%s ctrl=%s", [int(q * 100) for q in qs], pq, cq)
+    # explicit per-agent observation composition (interpretability depends on this)
+    log.info("  shared context (every agent): %s", manifest[SHARED_GROUP])
+    for organ in [o for o in manifest if o != SHARED_GROUP]:
+        log.info("    agent[%-14s] obs dim=%d", organ,
+                 len(manifest[organ]) + len(manifest[SHARED_GROUP]))
     log.info("  wrote %s", hourly_path(cfg))
     return hourly_path(cfg)

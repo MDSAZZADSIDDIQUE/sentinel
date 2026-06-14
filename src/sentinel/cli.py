@@ -161,9 +161,19 @@ def build_features(
 
 
 @app.command("train-baselines")
-def train_baselines() -> None:
-    """Phase 3: NEWS/MEWS, XGBoost, GRU/Transformer baselines."""
-    _todo("Phase 3")
+def train_baselines(
+    mode: str = typer.Option(None, help="Override cohort mode: dev | full."),
+    seeds: int = typer.Option(3, help="Number of seeds for learned baselines."),
+) -> None:
+    """Phase 3: NEWS/MEWS + XGBoost baselines (+ measurement ablation)."""
+    from .config import FeatureConfig
+    from .eval.run_baselines import run as run_baselines
+
+    cohort = CohortConfig.load()
+    if mode:
+        cohort = CohortConfig(**{**cohort.__dict__, "mode": mode})
+    with stage("train-baselines"):
+        run_baselines(cohort, FeatureConfig.load(), seeds=tuple(range(seeds)))
 
 
 @app.command("train-marl")
