@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sentinel"
+version = "0.1.0"
+description = "SENTINEL: cooperative multi-agent RL for early warning of ICU patient deterioration (Sepsis-3)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "SENTINEL authors" }]
+
+# Core dependencies are pinned to the versions verified on the target machine
+# (Anaconda base env, Python 3.13.9). torch is the CUDA build (cu124); it must
+# be installed from the PyTorch index, see README. Everything here is already
+# present in the working environment.
+dependencies = [
+    "duckdb==1.5.3",
+    "pandas==2.3.3",
+    "pyarrow==21.0.0",
+    "numpy==2.3.5",
+    "scipy==1.16.3",
+    "scikit-learn==1.7.2",
+    "pyyaml==6.0.3",
+    "typer==0.20.0",
+    "rich>=13.0",
+    "matplotlib==3.10.6",
+    "psutil==7.0.0",
+    "gymnasium==1.2.3",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+# torch is declared here for documentation, but install the CUDA build from the
+# PyTorch index first (see README): pip install torch --index-url .../cu124
+torch = ["torch>=2.6"]
+# Phase 3 baselines
+ml = ["xgboost>=2.0"]
+# Phase 5 federated learning
+federated = ["flwr>=1.8"]
+# Phase 7 dashboard
+dashboard = ["streamlit>=1.50", "altair>=5.0"]
+# Experiment tracking (offline)
+tracking = ["wandb>=0.16"]
+dev = ["pytest==8.4.2", "pytest-cov>=5.0", "ruff>=0.6"]
+
+[project.scripts]
+sentinel = "sentinel.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+sentinel = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+ignore = ["E501"]

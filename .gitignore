@@ -1,0 +1,61 @@
+# ============================================================================
+# DATA GOVERNANCE — MIMIC-IV is credentialed data under a PhysioNet DUA.
+# NEVER commit raw data, derived row-level patient data, or anything with PHI.
+# ============================================================================
+# Anchored to repo root so they don't match src/sentinel/data, src/sentinel/env
+/mimic-iv-3.1/
+/data/
+/outputs/
+**/*.parquet
+**/*.csv
+**/*.csv.gz
+!research_paper/**/*.csv   # (none expected; guard in case of small template assets)
+
+# DuckDB temp / spill
+**/duckdb_tmp/
+*.duckdb
+*.duckdb.wal
+
+# Model checkpoints / logs / tracking
+*.pt
+*.pth
+*.ckpt
+wandb/
+lightning_logs/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+.coverage
+htmlcov/
+
+# Virtual envs
+.venv/
+venv/
+/env/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# LaTeX build artifacts (keep .tex, .bib, figures; drop build cruft)
+research_paper/**/*.aux
+research_paper/**/*.bbl
+research_paper/**/*.blg
+research_paper/**/*.out
+research_paper/**/*.toc
+research_paper/**/*.synctex.gz
+research_paper/**/*.fls
+research_paper/**/*.fdb_latexmk
+research_paper/**/*.log
