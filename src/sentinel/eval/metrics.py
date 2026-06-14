@@ -72,28 +72,49 @@ def reliability(y: np.ndarray, score: np.ndarray, n_bins: int = 10) -> list[dict
 
 
 # ----------------------------- episode level -----------------------------
+def _count_alarm_events(alert: np.ndarray, refractory: int) -> int:
+    """Distinct alarm EVENTS: rising edges debounced by a refractory window.
+
+    A sustained alert is one event; a new event only fires on a fresh rise that
+    is more than `refractory` hours after the last event (models clinician
+    interruptions, not alert-hours)."""
+    events, last, prev = 0, -10**9, False
+    for t, a in enumerate(alert):
+        if a and not prev and (t - last) > refractory:
+            events += 1
+            last = t
+        prev = bool(a)
+    return events
+
+
 @dataclass
 class EpisodeSummary:
     stay_id: int
     label: int
     onset_hr: float           # nan for controls
     first_alert_hr: float     # nan if never alerted
-    alert_hours: int
+    alert_hours: int          # hours with score>=thr
+    tp_alert_hours: int       # alert hours that are truly in-window (y=1)
+    alarm_events: int         # refractory-debounced distinct events
     n_hours: int
 
 
-def episode_summaries(stay_ids, hr, score, t_to_onset, ep_label, threshold) -> list[EpisodeSummary]:
+def episode_summaries(stay_ids, hr, score, t_to_onset, ep_label, threshold,
+                      alert_window: int = 6, refractory: int = 4) -> list[EpisodeSummary]:
     alert = score >= threshold
     out = []
     for s in np.unique(stay_ids):
         m = stay_ids == s
-        hrs, al = hr[m], alert[m]
-        lead = t_to_onset[m]
+        hrs, al, lead = hr[m], alert[m], t_to_onset[m]
         label = int(ep_label[m][0])
         onset_hr = float(hrs[0] + lead[0]) if label == 1 and np.isfinite(lead[0]) else float("nan")
+        y = (label == 1) & np.isfinite(lead) & (lead >= 1) & (lead <= alert_window)
         fa = hrs[al]
-        first = float(fa.min()) if fa.size else float("nan")
-        out.append(EpisodeSummary(int(s), label, onset_hr, first, int(al.sum()), int(m.sum())))
+        out.append(EpisodeSummary(
+            int(s), label, onset_hr,
+            float(fa.min()) if fa.size else float("nan"),
+            int(al.sum()), int((al & y).sum()),
+            _count_alarm_events(al, refractory), int(m.sum())))
     return out
 
 
@@ -102,7 +123,9 @@ class ClinicalMetrics:
     sensitivity: float        # positives alerted before onset
     median_lead_h: float      # over detected positives
     fa_rate: float            # controls with any alarm
-    alarms_per_day: float     # alert-hours per patient-day
+    alarm_events_per_day: float   # HEADLINE burden: distinct events / patient-day
+    alert_hours_per_day: float    # reported alongside (sustained-alert burden)
+    ppv: float                # per-hour precision at the operating point
     n_pos: int
     n_ctrl: int
 
@@ -112,41 +135,37 @@ def clinical_metrics(summaries: list[EpisodeSummary]) -> ClinicalMetrics:
     ctrl = [e for e in summaries if e.label == 0]
     detected = [e for e in pos if np.isfinite(e.first_alert_hr) and e.first_alert_hr < e.onset_hr]
     leads = [e.onset_hr - e.first_alert_hr for e in detected]
-    fa = [e for e in ctrl if e.alert_hours > 0]
+    fa = [e for e in ctrl if e.alarm_events > 0]
+    total_events = sum(e.alarm_events for e in summaries)
     total_alert_h = sum(e.alert_hours for e in summaries)
+    total_tp_h = sum(e.tp_alert_hours for e in summaries)
     total_days = sum(e.n_hours for e in summaries) / 24.0
     return ClinicalMetrics(
         sensitivity=len(detected) / len(pos) if pos else float("nan"),
         median_lead_h=float(np.median(leads)) if leads else float("nan"),
         fa_rate=len(fa) / len(ctrl) if ctrl else float("nan"),
-        alarms_per_day=total_alert_h / total_days if total_days else float("nan"),
+        alarm_events_per_day=total_events / total_days if total_days else float("nan"),
+        alert_hours_per_day=total_alert_h / total_days if total_days else float("nan"),
+        ppv=total_tp_h / total_alert_h if total_alert_h else float("nan"),
         n_pos=len(pos), n_ctrl=len(ctrl),
     )
 
 
-def threshold_for_sensitivity(stay_ids, hr, score, t_to_onset, ep_label,
-                              target: float = 0.85) -> float:
-    """Lowest threshold (least alarms) achieving >= target episode sensitivity on this split."""
-    cand = np.unique(np.round(np.quantile(score, np.linspace(0.5, 0.999, 100)), 4))
-    best = 0.0
-    for thr in sorted(cand):
-        cm = clinical_metrics(episode_summaries(stay_ids, hr, score, t_to_onset, ep_label, thr))
-        if cm.sensitivity >= target:
-            best = float(thr)
-    return best
+def no_skill_auprc(y: np.ndarray) -> float:
+    """The chance/reference AUPRC = positive rate (essential to read AUPRC against)."""
+    return float(np.mean(y)) if len(y) else float("nan")
 
 
 def threshold_for_budget(stay_ids, hr, score, t_to_onset, ep_label,
-                         max_alarms_per_day: float = 8.0) -> float:
-    """Lowest threshold (most sensitive) whose alarm burden stays within budget.
+                         max_alarms_per_day: float = 8.0, alert_window: int = 6) -> float:
+    """Lowest threshold (most sensitive) whose ALARM-EVENT burden stays in budget.
 
-    Alarms/day decreases monotonically with threshold, so the lowest threshold
-    meeting the budget gives the most-sensitive operating point at that alarm
-    burden — the alarm-fatigue-aware choice the clinical framing calls for.
-    """
+    Event burden decreases with threshold, so the lowest threshold meeting the
+    budget is the most-sensitive alarm-fatigue-aware operating point."""
     cand = np.unique(np.round(np.quantile(score, np.linspace(0.5, 0.9995, 120)), 5))
     for thr in sorted(cand):
-        cm = clinical_metrics(episode_summaries(stay_ids, hr, score, t_to_onset, ep_label, thr))
-        if cm.alarms_per_day <= max_alarms_per_day:
+        cm = clinical_metrics(episode_summaries(stay_ids, hr, score, t_to_onset, ep_label,
+                                                thr, alert_window))
+        if cm.alarm_events_per_day <= max_alarms_per_day:
             return float(thr)
     return float(max(cand))

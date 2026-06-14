@@ -15,7 +15,7 @@ import numpy as np
 from ..config import CohortConfig, FeatureConfig
 from ..logging_utils import get_logger
 from ..paths import PATHS
-from ..features.dataset import load_hourly, load_split
+from ..features.dataset import ABLATIONS, load_hourly, load_split
 from . import metrics as M
 
 log = get_logger("eval.baselines")
@@ -28,8 +28,10 @@ def _eval_split(data, score, thr_arrays, budget, n_boot=500):
     cm = M.clinical_metrics(M.episode_summaries(
         data.stay_ids, data.hr, score, data.t_to_onset, data.ep_label, thr))
     return {"auprc": d.auprc, "auprc_lo": lo, "auprc_hi": hi, "auroc": d.auroc,
-            "brier": d.brier, "prev": d.prevalence, "sens": cm.sensitivity,
-            "lead": cm.median_lead_h, "alarms_day": cm.alarms_per_day, "fa": cm.fa_rate}
+            "brier": d.brier, "prev": d.prevalence, "no_skill": M.no_skill_auprc(data.y),
+            "sens": cm.sensitivity, "lead": cm.median_lead_h, "ppv": cm.ppv,
+            "events_day": cm.alarm_events_per_day, "alert_h_day": cm.alert_hours_per_day,
+            "fa": cm.fa_rate}
 
 
 def _agg(rows: list[dict]) -> dict:
@@ -63,55 +65,60 @@ def run(cfg: CohortConfig | None = None, fcfg: FeatureConfig | None = None,
         results[("NEWS2", "physiology", s)] = _agg([_eval_split(data, sc, thr_arrays, alarm_budget)])
     log.info("  NEWS2 done")
 
-    # ---- XGBoost (full vs physiology-only) ----
+    # ---- XGBoost (three-way ablation: full / no_measurement / physiology) ----
     from ..baselines.xgb import predict_xgb, train_xgb
-    for ablation in ("full", "physiology"):
-        phys = ablation == "physiology"
-        tr = load_split(cfg, "train", df=df, physiology_only=phys)
-        va = load_split(cfg, "val", df=df, physiology_only=phys)
+    for ablation in ABLATIONS:
+        tr = load_split(cfg, "train", df=df, ablation=ablation)
+        va = load_split(cfg, "val", df=df, ablation=ablation)
         per_split_rows: dict[str, list] = {s: [] for s in splits}
         for seed in seeds:
             model = train_xgb(tr, seed=seed)
-            va_sc = predict_xgb(model, va)
-            thr_arrays = (va.stay_ids, va.hr, va_sc, va.t_to_onset, va.ep_label)
+            thr_arrays = (va.stay_ids, va.hr, predict_xgb(model, va), va.t_to_onset, va.ep_label)
             for s in splits:
-                data = load_split(cfg, s, df=df, physiology_only=phys)
-                sc = predict_xgb(model, data)
-                per_split_rows[s].append(_eval_split(data, sc, thr_arrays, alarm_budget))
+                data = load_split(cfg, s, df=df, ablation=ablation)
+                per_split_rows[s].append(_eval_split(data, predict_xgb(model, data),
+                                                     thr_arrays, alarm_budget))
         for s in splits:
             results[("XGBoost", ablation, s)] = _agg(per_split_rows[s])
         log.info("  XGBoost[%s] done", ablation)
 
-    # ---- GRU single-agent + independent organ-ensemble ----
     if not skip_torch:
         from ..baselines.gru import (predict_gru, predict_organ_ensemble,
                                      train_gru, train_organ_ensemble)
-        for ablation in ("full", "physiology"):
-            phys = ablation == "physiology"
-            tr = load_split(cfg, "train", df=df, physiology_only=phys)
+        # ---- GRU single-agent (three-way ablation) ----
+        for ablation in ABLATIONS:
+            tr = load_split(cfg, "train", df=df, ablation=ablation)
+            va = load_split(cfg, "val", df=df, ablation=ablation)
             pw = (len(tr.y) - int(tr.y.sum())) / max(int(tr.y.sum()), 1)
-            gru_rows = {s: [] for s in splits}
-            ens_rows = {s: [] for s in splits}
+            rows = {s: [] for s in splits}
             for seed in seeds:
                 gm = train_gru(df, tr.feature_names, pw, seed=seed)
-                gv = predict_gru(gm, df, "val", tr.feature_names)
-                gthr = (load_split(cfg, "val", df=df, physiology_only=phys).stay_ids,
-                        load_split(cfg, "val", df=df, physiology_only=phys).hr,
-                        gv, load_split(cfg, "val", df=df, physiology_only=phys).t_to_onset,
-                        load_split(cfg, "val", df=df, physiology_only=phys).ep_label)
-                em = train_organ_ensemble(df, tr.manifest, pw, seed=seed)
-                ev = predict_organ_ensemble(em, df, "val")
-                ethr = (gthr[0], gthr[1], ev, gthr[3], gthr[4])
+                gthr = (va.stay_ids, va.hr, predict_gru(gm, df, "val", tr.feature_names),
+                        va.t_to_onset, va.ep_label)
                 for s in splits:
-                    data = load_split(cfg, s, df=df, physiology_only=phys)
-                    gru_rows[s].append(_eval_split(data, predict_gru(gm, df, s, tr.feature_names),
-                                                   gthr, alarm_budget))
-                    ens_rows[s].append(_eval_split(data, predict_organ_ensemble(em, df, s),
-                                                   ethr, alarm_budget))
+                    data = load_split(cfg, s, df=df, ablation=ablation)
+                    rows[s].append(_eval_split(data, predict_gru(gm, df, s, tr.feature_names),
+                                               gthr, alarm_budget))
             for s in splits:
-                results[("GRU-single", ablation, s)] = _agg(gru_rows[s])
-                results[("OrganEnsemble-indep", ablation, s)] = _agg(ens_rows[s])
-            log.info("  GRU + organ-ensemble [%s] done", ablation)
+                results[("GRU-single", ablation, s)] = _agg(rows[s])
+            log.info("  GRU-single[%s] done", ablation)
+        # ---- independent organ-ensemble (full + physiology) ----
+        for ablation in ("full", "physiology"):
+            tr = load_split(cfg, "train", df=df, ablation=ablation)
+            va = load_split(cfg, "val", df=df, ablation=ablation)
+            pw = (len(tr.y) - int(tr.y.sum())) / max(int(tr.y.sum()), 1)
+            rows = {s: [] for s in splits}
+            for seed in seeds:
+                em = train_organ_ensemble(df, tr.manifest, pw, seed=seed)
+                ethr = (va.stay_ids, va.hr, predict_organ_ensemble(em, df, "val"),
+                        va.t_to_onset, va.ep_label)
+                for s in splits:
+                    data = load_split(cfg, s, df=df, ablation=ablation)
+                    rows[s].append(_eval_split(data, predict_organ_ensemble(em, df, s),
+                                               ethr, alarm_budget))
+            for s in splits:
+                results[("OrganEnsemble-indep", ablation, s)] = _agg(rows[s])
+            log.info("  OrganEnsemble-indep[%s] done", ablation)
 
     _write_report(cfg, results, splits, seeds, alarm_budget)
     log.info("baselines done in %.1fs", time.perf_counter() - t0)
@@ -125,21 +132,29 @@ def _write_report(cfg, results, splits, seeds, alarm_budget):
          "**Measurement ablation:** `full` = physiology + measurement/timing channels; "
          "`physiology` = physiology values + demographics only (drops `__measured`/`__mask`/"
          "`hour_idx`). The full−physiology gap = reliance on clinician behavior/timing.\n"]
+    L.append("\n_Burden unit = **distinct alarm events/patient-day** (rising edge + 4h "
+             "refractory; the interruption count); alert-hours/day reported alongside. "
+             "PPV = per-hour precision at the operating point. AUPRC read against the "
+             "no-skill line (= positive rate)._\n")
     for s in splits:
         L.append(f"\n## Split: {s}\n")
-        L.append("| Model | Ablation | AUPRC | AUROC | Sens | Lead h | Alarms/day | FA-rate |")
-        L.append("|---|---|---|---|---|---|---|---|")
+        ns = next((m["no_skill"][0] for (mm, a, sp), m in results.items() if sp == s), float("nan"))
+        L.append(f"_No-skill AUPRC (chance) ≈ **{ns:.3f}**._\n")
+        L.append("| Model | Ablation | AUPRC | AUROC | PPV | Sens | Lead h | Events/day | AlertH/day | FA |")
+        L.append("|---|---|---|---|---|---|---|---|---|---|")
         for (model, abl, sp), m in results.items():
             if sp != s:
                 continue
-            ap, aps = m["auprc"]; lo = m["auprc_lo"][0]; hi = m["auprc_hi"][0]
+            ap = m["auprc"][0]; lo = m["auprc_lo"][0]; hi = m["auprc_hi"][0]
             L.append(f"| {model} | {abl} | {ap:.3f} [{lo:.3f}–{hi:.3f}] | "
-                     f"{m['auroc'][0]:.3f} | {m['sens'][0]:.2f} | {m['lead'][0]:.1f} | "
-                     f"{m['alarms_day'][0]:.1f} | {m['fa'][0]:.2f} |")
+                     f"{m['auroc'][0]:.3f} | {m['ppv'][0]:.2f} | {m['sens'][0]:.2f} | "
+                     f"{m['lead'][0]:.1f} | {m['events_day'][0]:.1f} | "
+                     f"{m['alert_h_day'][0]:.1f} | {m['fa'][0]:.2f} |")
     prev = next(iter(results.values()))["prev"][0]
     L.append(f"\n_Positive-hour prevalence ≈ {100*prev:.1f}%. Internal test is small "
              f"(few hundred positive episodes) — lean on the external CVICU split and the "
-             f"CIs; don't over-read small between-model gaps._\n")
+             f"CIs; don't over-read small between-model gaps. The full−no_measurement gap = "
+             f"clinician-behavior leak; no_measurement−physiology = timing prior._\n")
     PATHS.reports_root.mkdir(parents=True, exist_ok=True)
     out = PATHS.reports_root / f"baselines_{cfg.mode}.md"
     out.write_text("\n".join(L), encoding="utf-8")

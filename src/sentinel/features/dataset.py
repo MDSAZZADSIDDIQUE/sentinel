@@ -19,8 +19,15 @@ import pandas as pd
 from ..config import CohortConfig
 from ..paths import PATHS
 
-BEHAVIOR_SUFFIXES = ("__measured", "__mask")
-BEHAVIOR_EXTRA = ("hour_idx",)
+MEASUREMENT_SUFFIXES = ("__measured", "__mask")   # clinician-ordering behavior
+TIMING_COLS = ("hour_idx",)                        # temporal prior
+
+# Three ablation conditions decompose the non-physiology signal so we can tell
+# the dangerous behavior leak apart from the more-benign timing prior:
+#   full           : physiology + measurement-behavior + timing
+#   no_measurement : drop measurement channels, KEEP timing  (isolates the leak)
+#   physiology     : drop measurement AND timing             (pure physiology)
+ABLATIONS = ("full", "no_measurement", "physiology")
 
 
 def _manifest(cfg: CohortConfig) -> dict:
@@ -28,15 +35,23 @@ def _manifest(cfg: CohortConfig) -> dict:
         return json.load(fh)
 
 
-def is_behavior_col(c: str) -> bool:
-    return c.endswith(BEHAVIOR_SUFFIXES) or c in BEHAVIOR_EXTRA
+def col_dropped(c: str, ablation: str) -> bool:
+    is_measurement = c.endswith(MEASUREMENT_SUFFIXES)
+    is_timing = c in TIMING_COLS
+    if ablation == "full":
+        return False
+    if ablation == "no_measurement":
+        return is_measurement
+    if ablation == "physiology":
+        return is_measurement or is_timing
+    raise ValueError(f"unknown ablation {ablation!r}; expected one of {ABLATIONS}")
 
 
-def feature_columns(manifest: dict, physiology_only: bool = False) -> tuple[list[str], dict]:
+def feature_columns(manifest: dict, ablation: str = "full") -> tuple[list[str], dict]:
     """Flat ordered feature list + per-organ manifest, honoring the ablation."""
     fman: dict[str, list[str]] = {}
     for organ, cols in manifest.items():
-        kept = [c for c in cols if not (physiology_only and is_behavior_col(c))]
+        kept = [c for c in cols if not col_dropped(c, ablation)]
         fman[organ] = kept
     flat: list[str] = []
     for cols in fman.values():
@@ -65,13 +80,13 @@ def load_hourly(cfg: CohortConfig) -> pd.DataFrame:
     return pd.read_parquet(p)
 
 
-def load_split(cfg: CohortConfig, split: str, *, physiology_only: bool = False,
+def load_split(cfg: CohortConfig, split: str, *, ablation: str = "full",
                df: pd.DataFrame | None = None) -> SplitData:
     df = df if df is not None else load_hourly(cfg)
     sub = df[df["split"] == split]
     if sub.empty:
         raise ValueError(f"no rows for split={split!r} (mode={cfg.mode})")
-    cols, fman = feature_columns(_manifest(cfg), physiology_only)
+    cols, fman = feature_columns(_manifest(cfg), ablation)
     cols = [c for c in cols if c in sub.columns]
     return SplitData(
         X=sub[cols].to_numpy(dtype=np.float32),

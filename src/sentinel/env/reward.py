@@ -43,10 +43,15 @@ def in_window(label: int, lead_hours: float, cfg: RewardConfig) -> bool:
 
 
 def step_reward(label: int, action: int, lead_hours: float, already_alerted: bool,
-                cfg: RewardConfig) -> tuple[float, bool]:
-    """Return (reward, fired_timely_now). `lead_hours` = onset - t (NaN/inf for controls)."""
+                cfg: RewardConfig, new_alarm: bool = True) -> tuple[float, bool]:
+    """Return (reward, fired_timely_now). `lead_hours` = onset - t (NaN/inf for controls).
+
+    The per-escalate cost is charged only on a NEW alarm (rising edge into
+    escalate), aligning the cost with the alarm-EVENT burden metric so a sustained
+    alert isn't penalized like repeated interruptions (and flapping isn't rewarded).
+    """
     r = 0.0
-    if action == ESCALATE:
+    if action == ESCALATE and new_alarm:
         r -= cfg.c_escalate
     strength = _strength(action, cfg)
     timely = in_window(label, lead_hours, cfg)

@@ -21,7 +21,7 @@ from ..config import CohortConfig, FeatureConfig
 from ..constants import ORGAN_SYSTEMS, SHARED_GROUP
 from ..logging_utils import get_logger
 from ..paths import PATHS
-from .reward import RewardConfig, step_reward, terminal_reward
+from .reward import ESCALATE, RewardConfig, step_reward, terminal_reward
 
 log = get_logger("env")
 
@@ -81,17 +81,21 @@ class SentinelEnv:
         self._ep = self.episodes[idx]
         self._t = 0
         self._alerted = False
+        self._prev_effective = -1
         return self._obs()
 
     def step(self, actions: dict[str, int]):
         ep = self._ep
         effective = max(int(actions[a]) for a in self.agents)  # most-alarmed organ
+        new_alarm = effective == ESCALATE and self._prev_effective != ESCALATE  # rising edge
         lead = float(ep["t_to_onset"][self._t])
         if not np.isfinite(lead):
             lead = np.inf
-        r, fired = step_reward(ep["label"], effective, lead, self._alerted, self.rcfg)
+        r, fired = step_reward(ep["label"], effective, lead, self._alerted, self.rcfg,
+                               new_alarm=new_alarm)
         if fired:
             self._alerted = True
+        self._prev_effective = effective
 
         self._t += 1
         done = self._t >= len(ep["y"])
