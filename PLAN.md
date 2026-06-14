@@ -22,10 +22,22 @@ Status legend: ✅ done · 🟡 in progress · ⬜ not started · ⏸ awaiting r
 - [x] **Post-review refinement:** dynamic Sepsis-3 baseline (acute rise vs admission) + SOFA quality fixes → prevalence **37.6%**, ICU-acquired onset≥6h = **8,972 (11.2%)**, present-on-admission 35%→1.7%
 - [ ] **PAUSE — awaiting go-ahead for Phase 2.** Reward fn + full leakage-guard tests land with the Phase 2 env.
 
-## Phase 2 — Features + environment ⬜
-- [ ] Hourly feature tensors per stay; explicit missingness indicators; clinically-bounded ffill; normalize on train stats only
-- [ ] Dec-POMDP env (Gymnasium/PettingZoo-style): per-agent organ observations + minimal shared context; joint escalation action; episode = one stay streamed hourly
-- [ ] Reward = early-warning utility (ramped pre-onset reward, big miss penalty, small false-alarm + per-escalate cost); configurable; unit-tested on synthetic episodes
+## Phase 1.5 — Hardening (post-review gating) 🟡
+- [x] Per-variable forward-fill windows (MAP 3h … creatinine 24h) — no shared window
+- [x] **Gating A:** three-way split (POSITIVE onset≥H / EXCLUDED prevalent-or-early / CONTROL never-Sepsis-3); materialized to `analysis_groups_<mode>.parquet`; EXCLUDED never enters controls
+- [x] **Gating B:** features = pure organ physiology; antibiotics/cultures/suspicion are label-derivation only; unit test enforces it
+- [x] **Adopt:** baseline-0 sensitivity cohort built alongside primary; side-by-side in report
+- [x] Gold-standard test: independent re-derivation of onset agrees with pipeline; external-site-lock test
+- [ ] Rebuild, regenerate report, commit, confirm A & B to reviewer
+
+## Phase 2 — Features + environment ⬜  (specs D–H baked in)
+- [ ] **D. Label window + LOS-proxy guard:** positive hours = window preceding onset (consistent w/ ramped reward); observation cutoff strictly < onset; **align observation-window length across cases & controls** so the model can't learn LOS/episode-length as the outcome. Leakage test: no feature timestamp ≥ onset ever enters an observation for that episode.
+- [ ] **E. Missingness is double-edged:** include missingness/measurement-frequency indicators BUT ship an explicit **ablation with/without** them (measurement behavior encodes clinician suspicion — the Epic-sepsis failure mode). Report physiology-only vs +behavior signal.
+- [ ] **F. FiO₂ then S/F:** set FiO₂ = 0.21 for room-air periods first (coverage likely jumps); S/F fallback caps/down-weights SpO₂ ≥ 97% (curve saturation) and cites Rice et al. for the surrogate.
+- [ ] **G. External site locked** (CVICU) before any dev; never a training site (test enforces).
+- [ ] Hourly per-organ feature tensors; missingness indicators; **train-split-only** normalization; cache to parquet.
+- [ ] Dec-POMDP env: per-agent organ observations + minimal shared context; joint escalation action; episode = one stay streamed hourly.
+- [ ] Reward = early-warning utility (ramped pre-onset reward, big miss penalty, small false-alarm + per-escalate cost); configurable; unit-tested on synthetic episodes.
 
 ## Phase 3 — Baselines ⬜
 - [ ] NEWS/MEWS (rule-based), XGBoost (windowed features), GRU/Transformer single-agent

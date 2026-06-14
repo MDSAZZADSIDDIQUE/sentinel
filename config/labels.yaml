@@ -7,10 +7,9 @@ horizon_hours: 6
 # SOFA: each component uses the worst value over a rolling window.
 sofa_window_hours: 24
 
-# Bounded forward-fill: a measurement expires if not repeated (mirrors mimic-code
-# trailing-window semantics; avoids prevalence inflation from unbounded carry).
-ffill_lab_hours: 48
-ffill_vital_hours: 24
+# Per-variable forward-fill windows are defined in labels/sofa.py:FFILL_HOURS
+# (MAP 3h, FiO2/GCS 6h, PaO2 8h, chemistry/CBC 24h, vent 12h) — a vital and a
+# chemistry lab must not share a validity window.
 # Don't penalize GCS verbal=1T (intubated, can't speak) as neurologic dysfunction.
 gcs_vent_adjust: true
 

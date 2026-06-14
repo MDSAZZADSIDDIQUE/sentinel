@@ -23,11 +23,11 @@ from .suspicion import suspicion_path
 log = get_logger("labels.sepsis3")
 
 
-def sepsis3_path(cfg: CohortConfig):
-    return PATHS.labels_root / f"sepsis3_{cfg.mode}.parquet"
+def sepsis3_path(cfg: CohortConfig, tag: str = ""):
+    return PATHS.labels_root / f"sepsis3_{cfg.mode}{tag}.parquet"
 
 
-def build_sepsis3(cfg: CohortConfig, lcfg: LabelConfig) -> "object":
+def build_sepsis3(cfg: CohortConfig, lcfg: LabelConfig, tag: str = "") -> "object":
     sofa_p = sofa_path(cfg).as_posix()
     susp_p = suspicion_path(cfg).as_posix()
     thr = lcfg.sofa_increase_threshold
@@ -88,7 +88,7 @@ def build_sepsis3(cfg: CohortConfig, lcfg: LabelConfig) -> "object":
         con.close()
 
     PATHS.labels_root.mkdir(parents=True, exist_ok=True)
-    out = sepsis3_path(cfg)
+    out = sepsis3_path(cfg, tag)
     df.to_parquet(out, index=False)
 
     n = len(df)

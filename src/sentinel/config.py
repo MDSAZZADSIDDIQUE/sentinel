@@ -75,11 +75,8 @@ class LabelConfig:
     # SOFA: rolling worst-value window for each component (hours)
     sofa_window_hours: int = 24
 
-    # Forward-fill limits (hours): a measurement "expires" if not repeated. Bounded
-    # ffill mirrors mimic-code's trailing-window worst-value semantics (vs unbounded
-    # carry, which inflates prevalence). Labs persist longer than vitals.
-    ffill_lab_hours: int = 48
-    ffill_vital_hours: int = 24
+    # Per-variable forward-fill windows live in labels/sofa.py:FFILL_HOURS (a
+    # creatinine and an HR cannot share a validity window).
     # Intubated patients can't be assessed verbally; don't penalize GCS verbal=1T
     # as neurologic dysfunction (a major SOFA-CNS inflator otherwise).
     gcs_vent_adjust: bool = True

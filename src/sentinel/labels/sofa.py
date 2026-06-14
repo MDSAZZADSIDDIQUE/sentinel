@@ -24,6 +24,20 @@ from . import scoring
 
 log = get_logger("labels.sofa")
 
+# Per-variable forward-fill windows (hours) — how long one measurement stays
+# representative. A vital (MAP) is valid ~hours; a chemistry lab (creatinine) ~a
+# day; they must NOT share a window. Out-of-window gaps -> NaN -> component 0.
+FFILL_HOURS = {
+    "map": 3,            # arterial/NIBP measured ~hourly; expires fast
+    "fio2": 6,           # ventilator setting
+    "gcs_eye": 6, "gcs_verbal": 6, "gcs_motor": 6,  # neuro checks ~q4h
+    "pao2": 8,           # arterial blood gas, a few draws/day
+    "platelets": 24,     # CBC, ~daily
+    "bilirubin_total": 24,  # chemistry, ~daily
+    "creatinine": 24,    # chemistry, ~daily
+    "vent": 12,          # ventilation status persists across shifts
+}
+
 # Physiologic plausibility ranges; out-of-range values -> NaN before scoring
 # (drops charting artifacts, e.g. line-flush MAP spikes or GCS typos).
 RANGES = {
@@ -261,12 +275,12 @@ def build_hourly_sofa(cfg: CohortConfig, lcfg: LabelConfig) -> "object":
             wide[c] = wide[c].where((wide[c] >= lo) & (wide[c] <= hi))
 
     g = wide.groupby("stay_id", sort=False)
-    # --- bounded forward fill (a measurement "expires" if not repeated) ---
-    for c in ["pao2", "platelets", "bilirubin_total", "creatinine"]:  # labs
-        wide[c] = g[c].ffill(limit=lcfg.ffill_lab_hours)
-    for c in ["map", "fio2", "gcs_eye", "gcs_verbal", "gcs_motor"]:    # vitals
-        wide[c] = g[c].ffill(limit=lcfg.ffill_vital_hours)
-    wide["vent"] = g["vent"].ffill(limit=lcfg.ffill_vital_hours).fillna(0).astype(int)
+    # --- per-variable bounded forward fill (a measurement "expires" per its
+    #     own physiologic validity window; see FFILL_HOURS) ---
+    for c in ["pao2", "platelets", "bilirubin_total", "creatinine",
+              "map", "fio2", "gcs_eye", "gcs_verbal", "gcs_motor"]:
+        wide[c] = g[c].ffill(limit=FFILL_HOURS[c])
+    wide["vent"] = g["vent"].ffill(limit=FFILL_HOURS["vent"]).fillna(0).astype(int)
     # vasopressors already explicit per active hour -> missing = not running
     for d in ["norepinephrine", "epinephrine", "dopamine", "dobutamine"]:
         wide[d] = wide[d].fillna(0.0)

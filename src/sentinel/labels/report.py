@@ -19,8 +19,10 @@ from ..paths import PATHS
 from ..data.cohort import cohort_path, load_cohort
 from ..data.itemids import variable_meta
 from .scoring import SOFA_COMPONENTS
+from .sensitivity import compare as sensitivity_compare
 from .sepsis3 import sepsis3_path
-from .sofa import sofa_path
+from .sofa import FFILL_HOURS, sofa_path
+from .splits import CONTROL, EXCLUDED, POSITIVE, assign_groups
 from .suspicion import suspicion_path
 
 log = get_logger("labels.report")
@@ -73,6 +75,13 @@ def build_report(cfg: CohortConfig, lcfg: LabelConfig) -> "object":
     present_adm = int((onset <= 0).sum())
     # early-warning-eligible: onset during ICU with >= H h of prior data
     icu_acquired = septic[septic["onset_hour"] >= H]
+
+    # three-way analysis split (Gating A: no control contamination)
+    groups = assign_groups(df, H)
+    n_pos = int((groups == POSITIVE).sum())
+    n_exc = int((groups == EXCLUDED).sum())
+    n_ctrl = int((groups == CONTROL).sum())
+    ctrl_susp = int(df.loc[groups == CONTROL, "has_suspicion"].sum())
 
     # site partition table — both rates over the cohort (nullable Int64 onset_hour
     # would otherwise make `>= H` skip non-septic rows and inflate the rate).
@@ -144,23 +153,70 @@ def build_report(cfg: CohortConfig, lcfg: LabelConfig) -> "object":
             cnt = int(((onset >= lo) & (onset <= hi)).sum())
         L.append(f"  - {lab:<13} h : {cnt:>6,} ({100*cnt/max(len(septic),1):4.1f}%)")
 
-    L.append("\n## 3. SOFA\n")
+    L.append("\n## 3. Analysis cohort — three-way split (no control contamination)\n")
+    L.append("Early-warning models use **POSITIVE + CONTROL only**; the EXCLUDED group "
+             "(Sepsis-3 but onset < H, incl. present-on-admission) is held out of both — "
+             "it cannot be anticipated and must never sit in the controls.\n")
+    L.append(f"- **POSITIVE** (Sepsis-3, onset ≥ {H} h): **{n_pos:,}** ({100*n_pos/n:.1f}%)")
+    L.append(f"- **EXCLUDED** (Sepsis-3, onset < {H} h / present-on-admission): "
+             f"{n_exc:,} ({100*n_exc/n:.1f}%) — *held out*")
+    L.append(f"- **CONTROL** (never meets Sepsis-3 at any hour): {n_ctrl:,} ({100*n_ctrl/n:.1f}%)")
+    L.append(f"- partition check: {n_pos:,} + {n_exc:,} + {n_ctrl:,} = {n_pos+n_exc+n_ctrl:,} = N ✓")
+    L.append(f"- transparency: {ctrl_susp:,} controls had suspicion-of-infection but no "
+             f"qualifying SOFA rise (suspected-not-septic; can be optionally excluded in Phase 2).")
+
+    L.append("\n## 4. Leakage controls — features vs label-defining sources\n")
+    L.append("**Model inputs are pure organ physiology.** The infection signals that *define* "
+             "the Sepsis-3 label are used only in label derivation and are **never** features:\n")
+    L.append("- **Label-derivation only (NOT features):** antibiotic prescriptions, "
+             "microbiology/culture orders, suspicion-of-infection time, SOFA-onset linkage.")
+    meta = variable_meta()
+    by_org: dict[str, list[str]] = {}
+    for v, m in meta.items():
+        by_org.setdefault(m["organ"], []).append(v)
+    L.append("- **Features (25 vars, the 6 organ systems + shared):**")
+    for org in sorted(by_org):
+        L.append(f"  - *{org}*: {', '.join(sorted(by_org[org]))}")
+    L.append("\n  Note: vasopressor doses and ventilation status are legitimate treatment/"
+             "physiology signals observed at decision time (≤ t) to predict *future* onset "
+             "(t + H); they are not the infection criterion. A unit test asserts no antibiotic/"
+             "culture source is in the feature set.")
+
+    L.append("\n## 5. Baseline sensitivity — dynamic (primary) vs strict mimic-code baseline-0\n")
+    L.append("Both cohorts reported side by side so the effect of the baseline choice is "
+             "explicit (the canonical Seymour et al. operationalization assumes baseline-0).\n")
+    try:
+        sens = sensitivity_compare(cfg, lcfg)
+        L.append("  | metric | " + " | ".join(sens.columns[1:]) + " |")
+        L.append("  |---|" + "---|" * (len(sens.columns) - 1))
+        for _, r in sens.iterrows():
+            L.append("  | " + " | ".join(str(r[c]) for c in sens.columns) + " |")
+    except Exception as exc:  # pragma: no cover
+        L.append(f"  _(sensitivity table unavailable: {exc})_")
+
+    L.append("\n## 6. SOFA\n")
     L.append(f"- Mean total SOFA: **{sofa_mean:.2f}**  ·  hours with SOFA ≥ 2: "
              f"{sofa_hours_ge2*100:.1f}%")
+    L.append("- **Ventilation-aware GCS:** for ventilated patients a verbal score of 1 "
+             "(intubated/1T) is restored to normal — the tube, not neurologic dysfunction, "
+             "prevents speech (removed the sedation artifact: CNS mean 1.30 → 0.84).")
+    L.append("- **Per-variable forward-fill windows** (a measurement expires per its own "
+             "validity; a vital and a chemistry lab do not share a window): "
+             + ", ".join(f"{k} {v}h" for k, v in FFILL_HOURS.items()) + ".")
     L.append("\n  | Component (organ) | mean | % hours > 0 |")
     L.append("  |---|---|---|")
     for c in SOFA_COMPONENTS:
         mean, frac = comp_stats[c]
         L.append(f"  | {c.replace('sofa_','')} | {mean:.2f} | {frac:.1f}% |")
 
-    L.append("\n## 4. Missingness (per-variable coverage)\n")
+    L.append("\n## 7. Missingness (per-variable coverage)\n")
     L.append("  Fraction of cohort stays with ≥ 1 measurement of each variable.\n")
     L.append("  | organ | variable | source | % stays |")
     L.append("  |---|---|---|---|")
     for _, r in cov.iterrows():
         L.append(f"  | {r['organ']} | {r['variable']} | {r['source']} | {r['pct_stays']:.1f}% |")
 
-    L.append("\n## 5. Planned site partition (federated, Phase 5)\n")
+    L.append("\n## 8. Planned site partition (federated, Phase 5)\n")
     L.append(f"Sites = `{cfg.site_partition_key}`. **External test site (held out): "
              f"{cfg.external_site}**. Remaining major units are the federated training "
              "sites; within them, splits are **time-based** to prevent leakage.\n")
@@ -173,7 +229,7 @@ def build_report(cfg: CohortConfig, lcfg: LabelConfig) -> "object":
         L.append(f"  | {s}{ext} | {int(row['n']):,} | {row['pct']:.1f}% | "
                  f"{100*row['sepsis']:.1f}% | {100*row['icu_acq']:.1f}% |")
 
-    L.append("\n## 6. Key assumptions & caveats (for review)\n")
+    L.append("\n## 9. Key assumptions & caveats (for review)\n")
     if lcfg.dynamic_baseline:
         L.append(f"- **Sepsis-3 = suspicion + acute SOFA rise ≥ {lcfg.sofa_increase_threshold}** over the "
                  f"patient's pre-suspicion **admission baseline** (min SOFA in [0, "
@@ -198,7 +254,7 @@ def build_report(cfg: CohortConfig, lcfg: LabelConfig) -> "object":
     L.append("- **Governance:** MIMIC is credentialed; the repo sits under OneDrive — pause/"
              "exclude sync for `data/`, `outputs/`, `mimic-iv-3.1/` or redirect via "
              "`SENTINEL_DATA_ROOT` to avoid syncing PHI to the cloud.")
-    L.append("\n## 7. Next (Phase 2, after approval)\n")
+    L.append("\n## 10. Next (Phase 2)\n")
     L.append(f"Hourly feature tensors (+ missingness indicators, train-split normalization) → "
              f"Dec-POMDP environment with per-organ observations and the early-warning reward, "
              f"targeting onset at t + {H} h for the ICU-acquired positive cohort.\n")
