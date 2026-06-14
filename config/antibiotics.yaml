@@ -1,0 +1,104 @@
+# Antibiotic name list for suspicion-of-infection (Sepsis-3).
+# Adapted from the MIT-LCP mimic-code `antibiotic` concept (generic + common
+# brand names). Matched case-insensitively as substrings of prescriptions.drug.
+# Prophylactic/topical-only agents are intentionally excluded.
+
+# Routes to EXCLUDE (non-systemic) when counting an antibiotic as suspicion.
+exclude_routes:
+  - OU
+  - OS
+  - OD
+  - AU
+  - AS
+  - AD
+  - TP          # topical
+  - "EYE"
+  - "EAR"
+  - "DWELL"
+  - "OINTMENT"
+  - "IRRIGATION"
+
+names:
+  - adoxa
+  - amikacin
+  - amoxicillin
+  - amoxicillin-clavulanate
+  - augmentin
+  - ampicillin
+  - ampicillin-sulbactam
+  - unasyn
+  - azithromycin
+  - zithromax
+  - aztreonam
+  - cayston
+  - bactrim
+  - sulfamethoxazole
+  - trimethoprim
+  - cefazolin
+  - cefepime
+  - maxipime
+  - cefotetan
+  - cefoxitin
+  - cefpodoxime
+  - ceftazidime
+  - fortaz
+  - ceftaroline
+  - ceftriaxone
+  - rocephin
+  - cefuroxime
+  - cephalexin
+  - keflex
+  - chloramphenicol
+  - cilastatin
+  - ciprofloxacin
+  - cipro
+  - clarithromycin
+  - biaxin
+  - clindamycin
+  - cleocin
+  - colistin
+  - daptomycin
+  - cubicin
+  - dicloxacillin
+  - doxycycline
+  - ertapenem
+  - invanz
+  - erythromycin
+  - gentamicin
+  - imipenem
+  - imipenem-cilastatin
+  - levofloxacin
+  - levaquin
+  - linezolid
+  - zyvox
+  - meropenem
+  - merrem
+  - methicillin
+  - metronidazole
+  - flagyl
+  - minocycline
+  - moxifloxacin
+  - avelox
+  - nafcillin
+  - nitrofurantoin
+  - macrobid
+  - macrodantin
+  - norfloxacin
+  - ofloxacin
+  - oxacillin
+  - penicillin
+  - piperacillin
+  - piperacillin-tazobactam
+  - zosyn
+  - tazobactam
+  - polymyxin
+  - rifampin
+  - rifampicin
+  - streptomycin
+  - sulfadiazine
+  - tetracycline
+  - tigecycline
+  - tygacil
+  - tobramycin
+  - vancomycin
+  - vancocin

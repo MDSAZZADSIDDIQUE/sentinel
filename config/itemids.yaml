@@ -1,0 +1,734 @@
+_meta:
+  generated: '2026-06-14 21:14:12'
+  source: resolved from d_items/d_labitems by label; cross-checked vs mimic-code
+  n_variables: 25
+variables:
+  heart_rate:
+    organ: cardiovascular
+    source: chartevents
+    role: vital
+    unit: bpm
+    itemids:
+    - 220045
+    labels:
+      220045: Heart Rate
+    patterns:
+    - heart rate
+    notes: exclude alarm items
+    candidates:
+    - itemid: 220045
+      label: Heart Rate
+      category: Routine Vital Signs
+      unitname: bpm
+    - itemid: 220047
+      label: Heart Rate Alarm - Low
+      category: Alarms
+      unitname: bpm
+    - itemid: 220046
+      label: Heart rate Alarm - High
+      category: Alarms
+      unitname: bpm
+  resp_rate:
+    organ: respiratory
+    source: chartevents
+    role: vital
+    unit: insp/min
+    itemids:
+    - 220210
+    - 224690
+    labels:
+      220210: Respiratory Rate
+      224690: Respiratory Rate (Total)
+    patterns:
+    - respiratory rate
+    notes: ''
+    candidates:
+    - itemid: 220210
+      label: Respiratory Rate
+      category: Respiratory
+      unitname: insp/min
+    - itemid: 224688
+      label: Respiratory Rate (Set)
+      category: Respiratory
+      unitname: insp/min
+    - itemid: 224690
+      label: Respiratory Rate (Total)
+      category: Respiratory
+      unitname: insp/min
+    - itemid: 224689
+      label: Respiratory Rate (spontaneous)
+      category: Respiratory
+      unitname: insp/min
+  spo2:
+    organ: respiratory
+    source: chartevents
+    role: vital
+    unit: '%'
+    itemids:
+    - 220277
+    labels:
+      220277: O2 saturation pulseoxymetry
+    patterns:
+    - o2 saturation pulseoxymetry
+    notes: ''
+    candidates:
+    - itemid: 223769
+      label: O2 Saturation Pulseoxymetry Alarm - High
+      category: Alarms
+      unitname: '%'
+    - itemid: 223770
+      label: O2 Saturation Pulseoxymetry Alarm - Low
+      category: Alarms
+      unitname: '%'
+    - itemid: 220277
+      label: O2 saturation pulseoxymetry
+      category: Respiratory
+      unitname: '%'
+  sbp:
+    organ: cardiovascular
+    source: chartevents
+    role: vital
+    unit: mmHg
+    itemids:
+    - 220050
+    - 220179
+    labels:
+      220050: Arterial Blood Pressure systolic
+      220179: Non Invasive Blood Pressure systolic
+    patterns:
+    - blood pressure systolic
+    notes: ''
+    candidates:
+    - itemid: 220050
+      label: Arterial Blood Pressure systolic
+      category: Routine Vital Signs
+      unitname: mmHg
+    - itemid: 224167
+      label: Manual Blood Pressure Systolic Left
+      category: Routine Vital Signs
+      unitname: mmHg
+    - itemid: 227243
+      label: Manual Blood Pressure Systolic Right
+      category: Routine Vital Signs
+      unitname: mmHg
+    - itemid: 220179
+      label: Non Invasive Blood Pressure systolic
+      category: Routine Vital Signs
+      unitname: mmHg
+  temp_c:
+    organ: shared
+    source: chartevents
+    role: vital
+    unit: C
+    itemids:
+    - 223762
+    labels:
+      223762: Temperature Celsius
+    patterns:
+    - temperature celsius
+    notes: ''
+    candidates:
+    - itemid: 223762
+      label: Temperature Celsius
+      category: Routine Vital Signs
+      unitname: °C
+  temp_f:
+    organ: shared
+    source: chartevents
+    role: vital
+    unit: F
+    itemids:
+    - 223761
+    labels:
+      223761: Temperature Fahrenheit
+    patterns:
+    - temperature fahrenheit
+    notes: convert to Celsius downstream
+    candidates:
+    - itemid: 223761
+      label: Temperature Fahrenheit
+      category: Routine Vital Signs
+      unitname: °F
+  map:
+    organ: cardiovascular
+    source: chartevents
+    role: sofa
+    unit: mmHg
+    itemids:
+    - 220052
+    - 220181
+    - 225312
+    labels:
+      220052: Arterial Blood Pressure mean
+      220181: Non Invasive Blood Pressure mean
+      225312: ART BP Mean
+    patterns:
+    - blood pressure mean
+    - arterial blood pressure mean
+    notes: ''
+    candidates:
+    - itemid: 220052
+      label: Arterial Blood Pressure mean
+      category: Routine Vital Signs
+      unitname: mmHg
+    - itemid: 220181
+      label: Non Invasive Blood Pressure mean
+      category: Routine Vital Signs
+      unitname: mmHg
+  lactate:
+    organ: cardiovascular
+    source: labevents
+    role: feature
+    unit: mmol/L
+    itemids:
+    - 50813
+    - 52442
+    labels:
+      50813: Lactate
+      52442: Lactate
+    patterns:
+    - lactate
+    notes: ''
+    candidates:
+    - itemid: 50813
+      label: Lactate
+      fluid: Blood
+      category: Blood Gas
+    - itemid: 53154
+      label: Lactate
+      fluid: Blood
+      category: Chemistry
+    - itemid: 52442
+      label: Lactate
+      fluid: Blood
+      category: Blood Gas
+    - itemid: 50954
+      label: Lactate Dehydrogenase (LD)
+      fluid: Blood
+      category: Chemistry
+    - itemid: 50843
+      label: Lactate Dehydrogenase, Ascites
+      fluid: Ascites
+      category: Chemistry
+    - itemid: 51795
+      label: Lactate Dehydrogenase, CSF
+      fluid: Cerebrospinal Fluid
+      category: Chemistry
+    - itemid: 51054
+      label: Lactate Dehydrogenase, Pleural
+      fluid: Pleural
+      category: Chemistry
+    - itemid: 51944
+      label: Lactate Dehydrogenase, Stool
+      fluid: Stool
+      category: Chemistry
+  norepinephrine:
+    organ: cardiovascular
+    source: inputevents
+    role: vasopressor
+    unit: mcg/kg/min
+    itemids:
+    - 221906
+    labels:
+      221906: Norepinephrine
+    patterns:
+    - norepinephrine
+    notes: ''
+    candidates:
+    - itemid: 221906
+      label: Norepinephrine
+      category: Medications
+      unitname: mg
+  epinephrine:
+    organ: cardiovascular
+    source: inputevents
+    role: vasopressor
+    unit: mcg/kg/min
+    itemids:
+    - 221289
+    - 229617
+    labels:
+      221289: Epinephrine
+      229617: Epinephrine.
+    patterns:
+    - epinephrine
+    notes: ''
+    candidates:
+    - itemid: 221289
+      label: Epinephrine
+      category: Medications
+      unitname: mg
+    - itemid: 229617
+      label: Epinephrine.
+      category: Medications
+      unitname: mg
+    - itemid: 221906
+      label: Norepinephrine
+      category: Medications
+      unitname: mg
+  dopamine:
+    organ: cardiovascular
+    source: inputevents
+    role: vasopressor
+    unit: mcg/kg/min
+    itemids:
+    - 221662
+    labels:
+      221662: Dopamine
+    patterns:
+    - dopamine
+    notes: ''
+    candidates:
+    - itemid: 221662
+      label: Dopamine
+      category: Medications
+      unitname: mg
+  dobutamine:
+    organ: cardiovascular
+    source: inputevents
+    role: vasopressor
+    unit: mcg/kg/min
+    itemids:
+    - 221653
+    labels:
+      221653: Dobutamine
+    patterns:
+    - dobutamine
+    notes: ''
+    candidates:
+    - itemid: 221653
+      label: Dobutamine
+      category: Medications
+      unitname: mg
+  vasopressin:
+    organ: cardiovascular
+    source: inputevents
+    role: vasopressor
+    unit: units/min
+    itemids:
+    - 222315
+    labels:
+      222315: Vasopressin
+    patterns:
+    - vasopressin
+    notes: ''
+    candidates:
+    - itemid: 222315
+      label: Vasopressin
+      category: Medications
+      unitname: units
+  phenylephrine:
+    organ: cardiovascular
+    source: inputevents
+    role: vasopressor
+    unit: mcg/kg/min
+    itemids:
+    - 221749
+    labels:
+      221749: Phenylephrine
+    patterns:
+    - phenylephrine
+    notes: ''
+    candidates:
+    - itemid: 221749
+      label: Phenylephrine
+      category: Medications
+      unitname: mg
+    - itemid: 229632
+      label: Phenylephrine (200/250)
+      category: Medications
+      unitname: mg
+    - itemid: 229631
+      label: Phenylephrine (200/250)_OLD_1
+      category: Medications
+      unitname: mg
+    - itemid: 229630
+      label: Phenylephrine (50/250)
+      category: Medications
+      unitname: mg
+  pao2:
+    organ: respiratory
+    source: labevents
+    role: sofa
+    unit: mmHg
+    itemids:
+    - 50821
+    labels:
+      50821: pO2
+    patterns:
+    - po2
+    notes: ''
+    candidates:
+    - itemid: 52042
+      label: pO2
+      fluid: Fluid
+      category: Blood Gas
+    - itemid: 50821
+      label: pO2
+      fluid: Blood
+      category: Blood Gas
+    - itemid: 50832
+      label: pO2, Body Fluid
+      fluid: Other Body Fluid
+      category: Blood Gas
+  fio2:
+    organ: respiratory
+    source: chartevents
+    role: sofa
+    unit: '%'
+    itemids:
+    - 223835
+    labels:
+      223835: Inspired O2 Fraction
+    patterns:
+    - inspired o2 fraction
+    - fio2
+    notes: may be fraction (0-1) or percent (21-100)
+    candidates:
+    - itemid: 229841
+      label: FiO2 (CH)
+      category: ECMO
+      unitname: '%'
+    - itemid: 229280
+      label: FiO2 (ECMO)
+      category: ECMO
+      unitname: '%'
+    - itemid: 229238
+      label: FiO2 Challenge
+      category: Hemodynamics
+      unitname: null
+    - itemid: 229239
+      label: FiO2 Challenge Result
+      category: Hemodynamics
+      unitname: null
+    - itemid: 226754
+      label: FiO2ApacheIIValue
+      category: Scores - APACHE II
+      unitname: '%'
+    - itemid: 227010
+      label: FiO2_ApacheIV
+      category: Scores - APACHE IV (2)
+      unitname: '%'
+    - itemid: 227009
+      label: FiO2_ApacheIV_old
+      category: Scores - APACHE IV (2)
+      unitname: None
+    - itemid: 223835
+      label: Inspired O2 Fraction
+      category: Respiratory
+      unitname: None
+  vent_mode:
+    organ: respiratory
+    source: chartevents
+    role: feature
+    unit: ''
+    itemids:
+    - 223849
+    labels:
+      223849: Ventilator Mode
+    patterns:
+    - ventilator mode
+    notes: presence => mechanical ventilation for SOFA cutoff
+    candidates:
+    - itemid: 223849
+      label: Ventilator Mode
+      category: Respiratory
+      unitname: null
+    - itemid: 229314
+      label: Ventilator Mode (Hamilton)
+      category: Respiratory
+      unitname: null
+  o2_device:
+    organ: respiratory
+    source: chartevents
+    role: feature
+    unit: ''
+    itemids:
+    - 226732
+    labels:
+      226732: O2 Delivery Device(s)
+    patterns:
+    - o2 delivery device
+    notes: ''
+    candidates:
+    - itemid: 226732
+      label: O2 Delivery Device(s)
+      category: Respiratory
+      unitname: null
+  platelets:
+    organ: coagulation
+    source: labevents
+    role: sofa
+    unit: K/uL
+    itemids:
+    - 51265
+    labels:
+      51265: Platelet Count
+    patterns:
+    - platelet count
+    notes: ''
+    candidates:
+    - itemid: 51265
+      label: Platelet Count
+      fluid: Blood
+      category: Hematology
+    - itemid: 53189
+      label: Platelet Count
+      fluid: Blood
+      category: Chemistry
+  bilirubin_total:
+    organ: hepatic
+    source: labevents
+    role: sofa
+    unit: mg/dL
+    itemids:
+    - 50885
+    labels:
+      50885: Bilirubin, Total
+    patterns:
+    - bilirubin, total
+    notes: ''
+    candidates:
+    - itemid: 50885
+      label: Bilirubin, Total
+      fluid: Blood
+      category: Chemistry
+    - itemid: 53089
+      label: Bilirubin, Total
+      fluid: Blood
+      category: Chemistry
+    - itemid: 50838
+      label: Bilirubin, Total, Ascites
+      fluid: Ascites
+      category: Chemistry
+    - itemid: 51028
+      label: Bilirubin, Total, Body Fluid
+      fluid: Other Body Fluid
+      category: Chemistry
+    - itemid: 51783
+      label: Bilirubin, Total, CSF
+      fluid: Cerebrospinal Fluid
+      category: Chemistry
+    - itemid: 51812
+      label: Bilirubin, Total, Joint Fluid
+      fluid: Joint Fluid
+      category: Chemistry
+    - itemid: 51049
+      label: Bilirubin, Total, Pleural
+      fluid: Pleural
+      category: Chemistry
+    - itemid: 51932
+      label: Bilirubin, Total, Stool
+      fluid: Stool
+      category: Chemistry
+  creatinine:
+    organ: renal
+    source: labevents
+    role: sofa
+    unit: mg/dL
+    itemids:
+    - 50912
+    labels:
+      50912: Creatinine
+    patterns:
+    - creatinine
+    notes: blood/serum creatinine only
+    candidates:
+    - itemid: 51067
+      label: 24 hr Creatinine
+      fluid: Urine
+      category: Chemistry
+    - itemid: 51070
+      label: Albumin/Creatinine, Urine
+      fluid: Urine
+      category: Chemistry
+    - itemid: 51963
+      label: Amylase/Creatinine Clearance
+      fluid: Urine
+      category: Chemistry
+    - itemid: 51073
+      label: Amylase/Creatinine Ratio, Urine
+      fluid: Urine
+      category: Chemistry
+    - itemid: 50912
+      label: Creatinine
+      fluid: Blood
+      category: Chemistry
+    - itemid: 52546
+      label: Creatinine
+      fluid: Blood
+      category: Chemistry
+    - itemid: 51080
+      label: Creatinine Clearance
+      fluid: Urine
+      category: Chemistry
+    - itemid: 50841
+      label: Creatinine, Ascites
+      fluid: Ascites
+      category: Chemistry
+    - itemid: 51977
+      label: Creatinine, Blood
+      fluid: Urine
+      category: Chemistry
+    - itemid: 51032
+      label: Creatinine, Body Fluid
+      fluid: Other Body Fluid
+      category: Chemistry
+    - itemid: 51787
+      label: Creatinine, CSF
+      fluid: Cerebrospinal Fluid
+      category: Chemistry
+    - itemid: 51021
+      label: Creatinine, Joint Fluid
+      fluid: Joint Fluid
+      category: Chemistry
+    - itemid: 51052
+      label: Creatinine, Pleural
+      fluid: Pleural
+      category: Chemistry
+    - itemid: 51081
+      label: Creatinine, Serum
+      fluid: Urine
+      category: Chemistry
+    - itemid: 51937
+      label: Creatinine, Stool
+      fluid: Stool
+      category: Chemistry
+    - itemid: 51082
+      label: Creatinine, Urine
+      fluid: Urine
+      category: Chemistry
+    - itemid: 52024
+      label: Creatinine, Whole Blood
+      fluid: Blood
+      category: Blood Gas
+    - itemid: 51099
+      label: Protein/Creatinine Ratio
+      fluid: Urine
+      category: Chemistry
+    - itemid: 52000
+      label: Urine  Creatinine
+      fluid: Urine
+      category: Chemistry
+    - itemid: 51106
+      label: Urine Creatinine
+      fluid: Urine
+      category: Chemistry
+  urine_output:
+    organ: renal
+    source: outputevents
+    role: sofa
+    unit: mL
+    itemids:
+    - 226559
+    - 226560
+    - 226561
+    - 226584
+    - 226563
+    - 226564
+    - 226565
+    - 226567
+    - 226557
+    - 226558
+    - 226627
+    - 226631
+    - 226566
+    labels:
+      226559: Foley
+      226560: Void
+      226561: Condom Cath
+      226584: Ileoconduit
+      226563: Suprapubic
+      226564: R Nephrostomy
+      226565: L Nephrostomy
+      226567: Straight Cath
+      226557: R Ureteral Stent
+      226558: L Ureteral Stent
+      226627: OR Urine
+      226631: PACU Urine
+      226566: Urine and GU Irrigant Out
+    patterns:
+    - urine
+    - foley
+    - void
+    notes: sum across collection devices per 24h
+    candidates:
+    - itemid: 226559
+      label: Foley
+      category: Output
+      unitname: mL
+    - itemid: 227489
+      label: GU Irrigant/Urine Volume Out
+      category: Output
+      unitname: mL
+    - itemid: 226713
+      label: Incontinent/voids (estimate)
+      category: Output
+      unitname: null
+    - itemid: 226627
+      label: OR Urine
+      category: Output
+      unitname: mL
+    - itemid: 226631
+      label: PACU Urine
+      category: Output
+      unitname: mL
+    - itemid: 226566
+      label: Urine and GU Irrigant Out
+      category: Output
+      unitname: mL
+    - itemid: 226560
+      label: Void
+      category: Output
+      unitname: mL
+  gcs_eye:
+    organ: neurologic
+    source: chartevents
+    role: sofa
+    unit: ''
+    itemids:
+    - 220739
+    labels:
+      220739: GCS - Eye Opening
+    patterns:
+    - gcs - eye
+    notes: ''
+    candidates:
+    - itemid: 220739
+      label: GCS - Eye Opening
+      category: Neurological
+      unitname: null
+  gcs_verbal:
+    organ: neurologic
+    source: chartevents
+    role: sofa
+    unit: ''
+    itemids:
+    - 223900
+    labels:
+      223900: GCS - Verbal Response
+    patterns:
+    - gcs - verbal
+    notes: ''
+    candidates:
+    - itemid: 223900
+      label: GCS - Verbal Response
+      category: Neurological
+      unitname: null
+  gcs_motor:
+    organ: neurologic
+    source: chartevents
+    role: sofa
+    unit: ''
+    itemids:
+    - 223901
+    labels:
+      223901: GCS - Motor Response
+    patterns:
+    - gcs - motor
+    notes: ''
+    candidates:
+    - itemid: 223901
+      label: GCS - Motor Response
+      category: Neurological
+      unitname: null

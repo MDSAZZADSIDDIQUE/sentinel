@@ -1,0 +1,24 @@
+# ICU cohort inclusion criteria and site partition (Phase 1).
+# Choices documented here per project conventions; edit and re-run `build-cohort`.
+
+# dev = fast iteration (~4k stays from 1-2 care units); full = final numbers.
+mode: dev
+seed: 7
+
+# --- inclusion criteria ---
+min_age: 18          # adults only
+max_age: 89          # MIMIC caps ages >89 at anchor_age=91; exclude that band
+min_los_hours: 6.0   # need a few hours of ICU data to make hourly decisions
+first_stay_only: true  # first ICU stay per hospital admission (hadm_id)
+
+# --- dev-mode subsampling ---
+dev_careunits:
+  - "Medical Intensive Care Unit (MICU)"
+  - "Surgical Intensive Care Unit (SICU)"
+dev_max_stays: 4000
+
+# --- federated site partition (Phase 5) ---
+# Genuine non-IID populations: partition by admitting ICU. One unit held out
+# entirely as the external test site (never seen in training).
+site_partition_key: first_careunit
+external_site: "Cardiac Vascular Intensive Care Unit (CVICU)"

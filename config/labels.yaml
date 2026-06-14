@@ -1,0 +1,22 @@
+# Sepsis-3 / SOFA derivation settings (Phase 1).
+# Reimplements mimic-code concepts (sofa, suspicion_of_infection, sepsis3).
+
+# Early-warning prediction horizon: predict deterioration onset at t + H.
+horizon_hours: 6
+
+# SOFA: each component uses the worst value over a rolling window.
+sofa_window_hours: 24
+
+# Sepsis-3: organ dysfunction = acute rise in SOFA of >= threshold from baseline.
+sofa_increase_threshold: 2
+sofa_baseline: 0        # assume 0 absent known chronic organ dysfunction
+
+# Suspicion of infection (Seymour 2016 / mimic-code):
+#   if antibiotic first  -> culture within +72h
+#   if culture first     -> antibiotic within +24h
+si_abx_then_culture_hours: 72
+si_culture_then_abx_hours: 24
+
+# Sepsis onset = SOFA rise within this window around suspicion time.
+si_sofa_lookback_hours: 48
+si_sofa_lookahead_hours: 24
