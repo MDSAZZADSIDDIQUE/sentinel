@@ -164,8 +164,9 @@ def build_features(
 def train_baselines(
     mode: str = typer.Option(None, help="Override cohort mode: dev | full."),
     seeds: int = typer.Option(3, help="Number of seeds for learned baselines."),
+    skip_torch: bool = typer.Option(False, help="Skip GRU + organ-ensemble (NEWS+XGBoost only)."),
 ) -> None:
-    """Phase 3: NEWS/MEWS + XGBoost baselines (+ measurement ablation)."""
+    """Phase 3: NEWS/MEWS, XGBoost, GRU + independent organ-ensemble (+ ablation)."""
     from .config import FeatureConfig
     from .eval.run_baselines import run as run_baselines
 
@@ -173,7 +174,8 @@ def train_baselines(
     if mode:
         cohort = CohortConfig(**{**cohort.__dict__, "mode": mode})
     with stage("train-baselines"):
-        run_baselines(cohort, FeatureConfig.load(), seeds=tuple(range(seeds)))
+        run_baselines(cohort, FeatureConfig.load(), seeds=tuple(range(seeds)),
+                      skip_torch=skip_torch)
 
 
 @app.command("train-marl")

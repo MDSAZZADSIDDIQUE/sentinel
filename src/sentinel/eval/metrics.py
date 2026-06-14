@@ -134,3 +134,19 @@ def threshold_for_sensitivity(stay_ids, hr, score, t_to_onset, ep_label,
         if cm.sensitivity >= target:
             best = float(thr)
     return best
+
+
+def threshold_for_budget(stay_ids, hr, score, t_to_onset, ep_label,
+                         max_alarms_per_day: float = 8.0) -> float:
+    """Lowest threshold (most sensitive) whose alarm burden stays within budget.
+
+    Alarms/day decreases monotonically with threshold, so the lowest threshold
+    meeting the budget gives the most-sensitive operating point at that alarm
+    burden — the alarm-fatigue-aware choice the clinical framing calls for.
+    """
+    cand = np.unique(np.round(np.quantile(score, np.linspace(0.5, 0.9995, 120)), 5))
+    for thr in sorted(cand):
+        cm = clinical_metrics(episode_summaries(stay_ids, hr, score, t_to_onset, ep_label, thr))
+        if cm.alarms_per_day <= max_alarms_per_day:
+            return float(thr)
+    return float(max(cand))
