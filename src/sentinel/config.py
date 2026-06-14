@@ -75,10 +75,26 @@ class LabelConfig:
     # SOFA: rolling worst-value window for each component (hours)
     sofa_window_hours: int = 24
 
+    # Forward-fill limits (hours): a measurement "expires" if not repeated. Bounded
+    # ffill mirrors mimic-code's trailing-window worst-value semantics (vs unbounded
+    # carry, which inflates prevalence). Labs persist longer than vitals.
+    ffill_lab_hours: int = 48
+    ffill_vital_hours: int = 24
+    # Intubated patients can't be assessed verbally; don't penalize GCS verbal=1T
+    # as neurologic dysfunction (a major SOFA-CNS inflator otherwise).
+    gcs_vent_adjust: bool = True
+
     # Sepsis-3 acute SOFA rise required for organ dysfunction
     sofa_increase_threshold: int = 2
-    # baseline SOFA assumption (Sepsis-3 assumes 0 unless chronic dysfunction known)
-    sofa_baseline: int = 0
+    # Baseline SOFA. dynamic_baseline=True computes the *acute change* in SOFA per
+    # the Sepsis-3 wording: baseline = min SOFA over the pre-suspicion admission
+    # window [0, min(si_hour, baseline_window_hours)] (falls back to sofa_baseline
+    # if no pre-suspicion data). This excludes chronically high-SOFA patients who
+    # don't acutely deteriorate, matching published prevalence (~35-38%) and the
+    # early-warning framing. Set False to assume baseline 0 (strict mimic-code).
+    dynamic_baseline: bool = True
+    baseline_window_hours: int = 24
+    sofa_baseline: int = 0  # fallback baseline when no pre-suspicion data
 
     # Suspicion of infection time window relative to antibiotic/culture
     # (Seymour 2016 / mimic-code): if antibiotic first, culture within +72h;

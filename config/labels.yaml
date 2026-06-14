@@ -7,9 +7,22 @@ horizon_hours: 6
 # SOFA: each component uses the worst value over a rolling window.
 sofa_window_hours: 24
 
+# Bounded forward-fill: a measurement expires if not repeated (mirrors mimic-code
+# trailing-window semantics; avoids prevalence inflation from unbounded carry).
+ffill_lab_hours: 48
+ffill_vital_hours: 24
+# Don't penalize GCS verbal=1T (intubated, can't speak) as neurologic dysfunction.
+gcs_vent_adjust: true
+
 # Sepsis-3: organ dysfunction = acute rise in SOFA of >= threshold from baseline.
 sofa_increase_threshold: 2
-sofa_baseline: 0        # assume 0 absent known chronic organ dysfunction
+# dynamic_baseline=true => baseline = min SOFA over the pre-suspicion admission
+# window [0, min(si_hour, baseline_window_hours)] (the literal Sepsis-3 "acute
+# change"; ~37% prevalence, aligns with early-warning). false => strict mimic-code
+# baseline 0 (~44% on this cohort).
+dynamic_baseline: true
+baseline_window_hours: 24
+sofa_baseline: 0        # fallback when no pre-suspicion data
 
 # Suspicion of infection (Seymour 2016 / mimic-code):
 #   if antibiotic first  -> culture within +72h

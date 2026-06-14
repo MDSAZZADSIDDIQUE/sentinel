@@ -30,7 +30,24 @@ def sepsis3_path(cfg: CohortConfig):
 def build_sepsis3(cfg: CohortConfig, lcfg: LabelConfig) -> "object":
     sofa_p = sofa_path(cfg).as_posix()
     susp_p = suspicion_path(cfg).as_posix()
-    thr = lcfg.sofa_increase_threshold + lcfg.sofa_baseline  # delta>=thr w/ baseline
+    thr = lcfg.sofa_increase_threshold
+
+    # baseline per suspected stay: dynamic (min SOFA over the pre-suspicion
+    # admission window) or a constant (strict mimic-code). Sepsis requires an
+    # acute rise: sofa_total - baseline_sofa >= threshold.
+    if lcfg.dynamic_baseline:
+        base_cte = f"""
+        base AS (
+            SELECT s.stay_id,
+                   COALESCE(min(f.sofa_total), {lcfg.sofa_baseline}) AS baseline_sofa
+            FROM susp s LEFT JOIN sofa f ON f.stay_id = s.stay_id
+                 AND f.hr BETWEEN 0 AND least(greatest(0, s.si_hour),
+                                              {lcfg.baseline_window_hours})
+            GROUP BY s.stay_id
+        )"""
+    else:
+        base_cte = f"""
+        base AS (SELECT stay_id, {lcfg.sofa_baseline} AS baseline_sofa FROM susp)"""
 
     con = connect()
     try:
@@ -40,10 +57,13 @@ def build_sepsis3(cfg: CohortConfig, lcfg: LabelConfig) -> "object":
             WHERE has_suspicion = 1
         ),
         sofa AS (SELECT stay_id, hr, sofa_total FROM read_parquet('{sofa_p}')),
+        {base_cte},
         onset AS (
             SELECT s.stay_id, min(f.hr) AS onset_hour
-            FROM susp s JOIN sofa f ON f.stay_id = s.stay_id
-            WHERE f.sofa_total >= {thr}
+            FROM susp s
+            JOIN base b ON b.stay_id = s.stay_id
+            JOIN sofa f ON f.stay_id = s.stay_id
+            WHERE f.sofa_total - b.baseline_sofa >= {thr}
               AND f.hr BETWEEN s.si_hour - {lcfg.si_sofa_lookback_hours}
                           AND s.si_hour + {lcfg.si_sofa_lookahead_hours}
             GROUP BY s.stay_id
@@ -55,8 +75,10 @@ def build_sepsis3(cfg: CohortConfig, lcfg: LabelConfig) -> "object":
                CASE WHEN o.onset_hour IS NOT NULL THEN 1 ELSE 0 END AS sepsis3,
                o.onset_hour,
                fo.sofa_total AS sofa_at_onset,
+               b.baseline_sofa,
                ss.sofa_max
         FROM susp_all a
+        LEFT JOIN base b    ON b.stay_id = a.stay_id
         LEFT JOIN onset o   ON o.stay_id = a.stay_id
         LEFT JOIN sofa fo   ON fo.stay_id = a.stay_id AND fo.hr = o.onset_hour
         LEFT JOIN sofa_stay ss ON ss.stay_id = a.stay_id

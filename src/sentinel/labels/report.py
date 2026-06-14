@@ -174,16 +174,24 @@ def build_report(cfg: CohortConfig, lcfg: LabelConfig) -> "object":
                  f"{100*row['sepsis']:.1f}% | {100*row['icu_acq']:.1f}% |")
 
     L.append("\n## 6. Key assumptions & caveats (for review)\n")
-    L.append(f"- **Baseline SOFA = {lcfg.sofa_baseline}** (Sepsis-3 convention); sepsis = "
-             f"suspicion + SOFA ≥ {lcfg.sofa_increase_threshold} within "
-             f"[−{lcfg.si_sofa_lookback_hours} h, +{lcfg.si_sofa_lookahead_hours} h] of suspicion.")
-    L.append("- **Prevalence (~44%) is slightly above the canonical mimic-code figure (~35%)**, "
-             "driven by a high suspicion rate and the present-on-admission population. The "
-             "**early-warning task uses ICU-acquired positives (onset ≥ H)** plus never-septic "
-             "controls; present-on-admission cases have no pre-onset window.")
-    L.append("- **CNS is the largest SOFA contributor** (sedation → low GCS in ICU); intubated-"
-             "patient GCS is a known nuance to refine. **Labs are forward-filled within the stay**; "
-             "vitals/MAP/FiO2 for ≤ 24 h. Worst-in-hour aggregation (min MAP / min GCS) is used.")
+    if lcfg.dynamic_baseline:
+        L.append(f"- **Sepsis-3 = suspicion + acute SOFA rise ≥ {lcfg.sofa_increase_threshold}** over the "
+                 f"patient's pre-suspicion **admission baseline** (min SOFA in [0, "
+                 f"min(si_hour, {lcfg.baseline_window_hours} h)]), within "
+                 f"[−{lcfg.si_sofa_lookback_hours} h, +{lcfg.si_sofa_lookahead_hours} h] of suspicion. "
+                 "This follows the literal Sepsis-3 wording (*acute change* in SOFA) and yields "
+                 "prevalence in line with the literature (~35–38%). Strict mimic-code baseline-0 "
+                 "(SOFA ≥ 2 regardless of admission state) gives ~44% on this cohort and is "
+                 "available via `dynamic_baseline: false`.")
+    else:
+        L.append(f"- **Sepsis-3 = suspicion + SOFA ≥ {lcfg.sofa_increase_threshold}** (baseline "
+                 f"{lcfg.sofa_baseline}, strict mimic-code) within "
+                 f"[−{lcfg.si_sofa_lookback_hours} h, +{lcfg.si_sofa_lookahead_hours} h] of suspicion.")
+    L.append("- **SOFA refinements:** bounded forward-fill (labs 48 h, vitals 24 h; "
+             "measurements expire vs unbounded carry), **ventilation-aware GCS** (intubated "
+             "verbal=1T not penalized), and physiologic range filtering of artifacts. CNS is "
+             "still the largest contributor (residual sedation effect); worst-in-hour aggregation "
+             "(min MAP / GCS, max bilirubin / creatinine) is used.")
     L.append("- **Vasopressors confirmed in µg/kg/min** (no per-weight conversion needed).")
     L.append("- **Sites are simulated via care units, not real institutions** (a stated paper "
              "limitation).")

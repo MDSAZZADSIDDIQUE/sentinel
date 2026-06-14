@@ -24,9 +24,14 @@ from . import scoring
 
 log = get_logger("labels.sofa")
 
-# forward-fill limits (hours) by variable class
-FFILL_LABS = None        # unbounded within stay (labs persist)
-FFILL_VITALS = 24        # MAP, GCS, FiO2 shouldn't persist beyond a day
+# Physiologic plausibility ranges; out-of-range values -> NaN before scoring
+# (drops charting artifacts, e.g. line-flush MAP spikes or GCS typos).
+RANGES = {
+    "map": (10.0, 250.0),
+    "gcs_eye": (1, 4), "gcs_verbal": (1, 5), "gcs_motor": (1, 6),
+    "pao2": (10.0, 700.0), "platelets": (0.0, 2000.0),
+    "bilirubin_total": (0.0, 100.0), "creatinine": (0.0, 50.0),
+}
 
 # o2 devices implying invasive ventilation (approx ventilation status)
 INVASIVE_DEVICES = ("endotracheal", "tracheostomy")
@@ -249,15 +254,19 @@ def build_hourly_sofa(cfg: CohortConfig, lcfg: LabelConfig) -> "object":
             wide[d] = np.nan
 
     wide = wide.sort_values(["stay_id", "hr"]).reset_index(drop=True)
-    g = wide.groupby("stay_id", sort=False)
 
-    # --- forward fill within limits ---
-    for c in ["pao2", "platelets", "bilirubin_total", "creatinine"]:  # labs: unbounded
-        wide[c] = g[c].ffill()
-    for c in ["map", "fio2", "gcs_eye", "gcs_verbal", "gcs_motor"]:    # vitals: 24h
-        wide[c] = g[c].ffill(limit=FFILL_VITALS)
-    # ventilation: active for 24h after a vent entry
-    wide["vent"] = g["vent"].ffill(limit=FFILL_VITALS).fillna(0).astype(int)
+    # drop physiologically implausible values (artifacts) before carrying forward
+    for c, (lo, hi) in RANGES.items():
+        if c in wide.columns:
+            wide[c] = wide[c].where((wide[c] >= lo) & (wide[c] <= hi))
+
+    g = wide.groupby("stay_id", sort=False)
+    # --- bounded forward fill (a measurement "expires" if not repeated) ---
+    for c in ["pao2", "platelets", "bilirubin_total", "creatinine"]:  # labs
+        wide[c] = g[c].ffill(limit=lcfg.ffill_lab_hours)
+    for c in ["map", "fio2", "gcs_eye", "gcs_verbal", "gcs_motor"]:    # vitals
+        wide[c] = g[c].ffill(limit=lcfg.ffill_vital_hours)
+    wide["vent"] = g["vent"].ffill(limit=lcfg.ffill_vital_hours).fillna(0).astype(int)
     # vasopressors already explicit per active hour -> missing = not running
     for d in ["norepinephrine", "epinephrine", "dopamine", "dobutamine"]:
         wide[d] = wide[d].fillna(0.0)
@@ -268,7 +277,14 @@ def build_hourly_sofa(cfg: CohortConfig, lcfg: LabelConfig) -> "object":
     fio2 = np.where(fio2 > 1.0, fio2 / 100.0, fio2)
     fio2 = np.where((fio2 < 0.21) | (fio2 > 1.0), np.nan, fio2)
     pf_ratio = wide["pao2"].to_numpy() / np.where(fio2 > 0, fio2, np.nan)
-    gcs_total = wide["gcs_eye"] + wide["gcs_verbal"] + wide["gcs_motor"]
+    # ventilation-aware GCS: an intubated patient scored verbal=1T is not
+    # neurologically impaired by the tube; restore verbal to normal when vented.
+    verbal = wide["gcs_verbal"].to_numpy(dtype="float64")
+    if lcfg.gcs_vent_adjust:
+        vent_arr = wide["vent"].to_numpy() == 1
+        verbal = np.where(vent_arr & (verbal <= 1), 5.0, verbal)
+    gcs_total = (wide["gcs_eye"].to_numpy(dtype="float64") + verbal
+                 + wide["gcs_motor"].to_numpy(dtype="float64"))
     # 24h urine: rolling sum; require a full day observed (hr >= 24) to apply
     wide["urine_hr"] = wide["urine_hr"].fillna(0.0)
     urine_24h = g["urine_hr"].rolling(24, min_periods=24).sum().reset_index(level=0, drop=True)
@@ -282,7 +298,7 @@ def build_hourly_sofa(cfg: CohortConfig, lcfg: LabelConfig) -> "object":
     out["sofa_cardiovascular"] = scoring.score_cardiovascular(
         wide["map"].to_numpy(), wide["dopamine"].to_numpy(), wide["dobutamine"].to_numpy(),
         wide["epinephrine"].to_numpy(), wide["norepinephrine"].to_numpy())
-    out["sofa_cns"] = scoring.score_cns(gcs_total.to_numpy())
+    out["sofa_cns"] = scoring.score_cns(gcs_total)
     out["sofa_renal"] = scoring.score_renal(wide["creatinine"].to_numpy(), urine_24h)
     out["sofa_total"] = out[list(scoring.SOFA_COMPONENTS)].sum(axis=1)
 

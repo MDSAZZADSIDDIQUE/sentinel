@@ -12,14 +12,15 @@ Status legend: ✅ done · 🟡 in progress · ⬜ not started · ⏸ awaiting r
 - [x] `CLAUDE.md`, `PLAN.md`, `README.md`
 - [x] Verify data path + DuckDB row counts (no in-RAM load) → `outputs/logs/verify_data.log`
 
-## Phase 1 — Data → cohort → labels ⏸ (CHECKPOINT)
-- [ ] `to-parquet`: convert needed tables; big tables filtered to cohort `stay_id`/`hadm_id` + curated itemids
-- [ ] `resolve-itemids`: query `d_items`/`d_labitems` by label text → `config/itemids.yaml` (no unverified hardcoding; cross-check mimic-code)
-- [ ] `build-cohort`: adults 18–89, LOS ≥ 6h, first ICU stay/admission; `dev`/`full`; record `first_careunit` site → `config/cohort.yaml`
-- [ ] `build-labels`: hourly SOFA (6 components), suspicion-of-infection (abx+culture window), Sepsis-3 onset (acute SOFA rise ≥2)
-- [ ] Unit tests: SOFA component scoring + Sepsis-3 onset on hand-verified stays; leakage guard
-- [ ] `cohort-report`: size, sepsis prevalence, onset-time dist, missingness, site partition → `outputs/reports/cohort_report.md`
-- [ ] **PAUSE — summarize for review**
+## Phase 1 — Data → cohort → labels ✅ ⏸ CHECKPOINT REACHED (awaiting review)
+- [x] `to-parquet`: big tables filtered to cohort `stay_id`/`hadm_id` + curated itemids (DuckDB COPY)
+- [x] `resolve-itemids`: 25 vars resolved from `d_items`/`d_labitems` by label, cross-checked → `config/itemids.yaml` (0 unresolved)
+- [x] `build-cohort`: adults 18–89, LOS ≥ 6h, first ICU stay/admission; `dev`/`full`; `first_careunit` site → `config/cohort.yaml` (full = 80,248)
+- [x] `build-labels`: hourly SOFA (6 components), suspicion-of-infection, Sepsis-3 onset (acute SOFA rise ≥ 2)
+- [x] Unit tests: SOFA clinical truth tables + derivation invariants (persisted SOFA == pure scoring); 68 passing
+- [x] `cohort-report` → `outputs/reports/cohort_report.md`
+- [x] **Post-review refinement:** dynamic Sepsis-3 baseline (acute rise vs admission) + SOFA quality fixes → prevalence **37.6%**, ICU-acquired onset≥6h = **8,972 (11.2%)**, present-on-admission 35%→1.7%
+- [ ] **PAUSE — awaiting go-ahead for Phase 2.** Reward fn + full leakage-guard tests land with the Phase 2 env.
 
 ## Phase 2 — Features + environment ⬜
 - [ ] Hourly feature tensors per stay; explicit missingness indicators; clinically-bounded ffill; normalize on train stats only

@@ -59,13 +59,13 @@ def test_sofa_invariants(cfg):
 def test_sepsis3_invariants(cfg):
     p = sepsis3_path(cfg).as_posix()
     lcfg = LabelConfig.load()
-    thr = lcfg.sofa_increase_threshold + lcfg.sofa_baseline
+    thr = lcfg.sofa_increase_threshold
     con = duckdb.connect()
-    no_susp, no_onset, low_sofa, out_window = con.execute(f"""
+    no_susp, no_onset, low_rise, out_window = con.execute(f"""
         SELECT
           SUM(CASE WHEN sepsis3=1 AND has_suspicion<>1 THEN 1 ELSE 0 END),
           SUM(CASE WHEN sepsis3=1 AND onset_hour IS NULL THEN 1 ELSE 0 END),
-          SUM(CASE WHEN sepsis3=1 AND sofa_at_onset < {thr} THEN 1 ELSE 0 END),
+          SUM(CASE WHEN sepsis3=1 AND (sofa_at_onset - baseline_sofa) < {thr} THEN 1 ELSE 0 END),
           SUM(CASE WHEN sepsis3=1 AND (onset_hour < si_hour - {lcfg.si_sofa_lookback_hours}
                                     OR onset_hour > si_hour + {lcfg.si_sofa_lookahead_hours})
                THEN 1 ELSE 0 END)
@@ -73,7 +73,7 @@ def test_sepsis3_invariants(cfg):
     """).fetchone()
     assert no_susp == 0, "sepsis3 requires suspicion of infection"
     assert no_onset == 0, "septic stays must have an onset hour"
-    assert low_sofa == 0, "SOFA at onset must meet the threshold"
+    assert low_rise == 0, "acute SOFA rise at onset must meet the threshold"
     assert out_window == 0, "onset must lie within the suspicion window"
 
 

@@ -160,7 +160,18 @@ All raw tables are gzipped CSV under `mimic-iv-3.1/{hosp,icu}/`. Schemas verifie
   CVICU (held out). Sites are simulated via care units, not real institutions —
   stated as a limitation in the paper.
 
-## Open assumptions to revisit (Phase 1 checkpoint)
+- **2026-06-14 (post-checkpoint)** Per user review, tightened Sepsis-3 toward
+  literature prevalence: (a) **dynamic baseline** — sepsis = acute SOFA rise ≥ 2
+  over the pre-suspicion admission baseline (min SOFA in [0, min(si_hour, 24)]),
+  the literal Sepsis-3 "acute change"; ~37% prevalence vs ~44% for strict
+  mimic-code baseline-0 (kept available via `dynamic_baseline: false`).
+  (b) **bounded ffill** (labs 48 h, vitals 24 h), **ventilation-aware GCS**
+  (intubated verbal=1T not penalized), **physiologic range filtering**. CNS
+  de-inflated (mean 1.30→0.84). OneDrive/DUA: user manages sync themselves.
+
+## Open assumptions to revisit
 - Default prediction horizon `H = 6h`; SOFA worst-value rolling window 24h.
 - `min_los_hours = 6`, adults 18–89, first ICU stay per admission only.
-- Baseline SOFA assumed 0 (Sepsis-3 convention absent known chronic dysfunction).
+- Dynamic baseline window 24h; worst-in-hour aggregation (min MAP/GCS, max
+  bilirubin/creatinine). Respiratory PF needs both PaO2 (~66%) and FiO2 (~50%)
+  → consider SpO2/FiO2 fallback in Phase 2.
