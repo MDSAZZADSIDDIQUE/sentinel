@@ -1,0 +1,20 @@
+# Phase 2 hourly feature tensor + episode settings.
+seed: 7
+
+# Episode = last `max_obs_hours` before the end (onset for positives; a
+# length-matched pseudo-onset for controls so episode length can't proxy label).
+max_obs_hours: 72
+min_obs_hours: 6
+# Per-hour positive label: y(t)=1 iff onset within the next `alert_window_hours`.
+alert_window_hours: 6
+
+# Respiratory surrogate (spec F): room-air FiO2 default + S/F fallback (Rice et al.).
+room_air_fio2: 0.21
+spo2_sf_cap: 97.0
+
+# Measurement-frequency / missingness channels (spec E) — toggle for the
+# with/without ablation (clinician-behavior signal vs pure physiology).
+include_measurement_features: true
+
+# Optionally drop suspected-not-septic (ambiguous) controls from modeling.
+drop_suspected_controls: false

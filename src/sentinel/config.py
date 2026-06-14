@@ -66,6 +66,41 @@ class CohortConfig:
 
 
 @dataclass(frozen=True)
+class FeatureConfig:
+    """Hourly feature tensor + episode/observation settings (config/features.yaml)."""
+
+    seed: int = 7
+    # episode = the last `max_obs_hours` before the episode end (onset for
+    # positives; a length-matched pseudo-onset for controls). Bounds sequence
+    # length for the GTX 1650 and focuses on the pre-onset window.
+    max_obs_hours: int = 72
+    min_obs_hours: int = 6
+    # per-hour positive label: y(t)=1 iff onset is within the next `alert_window`
+    # hours, i.e. t in [onset-alert_window, onset-1].
+    alert_window_hours: int = 6
+
+    # respiratory surrogate: room-air FiO2 default + S/F fallback (Rice et al.).
+    room_air_fio2: float = 0.21
+    spo2_sf_cap: float = 97.0  # S/F invalid where SpO2 saturates the O2-Hb curve
+
+    # measurement-frequency / missingness features (double-edged — clinician
+    # behavior signal). Toggle for the with/without ablation (spec E).
+    include_measurement_features: bool = True
+
+    # drop suspected-not-septic controls from the modeling set (optional; they
+    # are the ambiguous negatives flagged in the cohort report).
+    drop_suspected_controls: bool = False
+
+    @classmethod
+    def load(cls, name: str = "features") -> "FeatureConfig":
+        try:
+            data = read_yaml(name)
+        except FileNotFoundError:
+            return cls()
+        return cls(**_filter_known(cls, data))
+
+
+@dataclass(frozen=True)
 class LabelConfig:
     """Sepsis-3 / SOFA derivation settings (config/labels.yaml)."""
 

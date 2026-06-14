@@ -169,6 +169,19 @@ All raw tables are gzipped CSV under `mimic-iv-3.1/{hosp,icu}/`. Schemas verifie
   (intubated verbal=1T not penalized), **physiologic range filtering**. CNS
   de-inflated (mean 1.30→0.84). OneDrive/DUA: user manages sync themselves.
 
+- **2026-06-15 (Phase 2)** Features + Dec-POMDP env. **Data split:** temporal by
+  `anchor_year_group` (train 2008–2016 / val 2017–2019 / test 2020–2022) — the
+  only honest time axis in date-shifted MIMIC-IV — with **CVICU held out entirely
+  as the external site**. Normalization on TRAIN rows only. **Three-way modeling
+  cohort:** POSITIVE (onset≥H) + CONTROL (never Sepsis-3); EXCLUDED held out.
+  **Episodes:** last `max_obs_hours=72` before the end; end = onset (positive) or
+  a **length-matched pseudo-onset** for controls (LOS-proxy guard); observation
+  strictly < onset (leakage test). **Features:** per-organ values + missingness
+  mask + measured-this-hour (E ablation toggle); room-air FiO₂=0.21 + S/F
+  surrogate (SpO₂ capped 97, Rice et al.). **Env:** 6 organ agents see own organ
+  + shared context; team alert = max over agents; ramped early-warning reward
+  (lead-time bonus, miss penalty, false-alarm + per-escalate cost).
+
 ## Open assumptions to revisit
 - Default prediction horizon `H = 6h`; SOFA worst-value rolling window 24h.
 - `min_los_hours = 6`, adults 18–89, first ICU stay per admission only.

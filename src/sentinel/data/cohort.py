@@ -22,7 +22,8 @@ log = get_logger("data.cohort")
 COHORT_COLUMNS = [
     "subject_id", "hadm_id", "stay_id", "site", "first_careunit", "last_careunit",
     "intime", "outtime", "los_hours", "age", "age_band", "gender", "race",
-    "admittime", "dischtime", "deathtime", "dod", "hospital_expire_flag",
+    "anchor_year_group", "admittime", "dischtime", "deathtime", "dod",
+    "hospital_expire_flag",
 ]
 
 
@@ -38,7 +39,7 @@ def _eligible_sql(cfg: CohortConfig) -> str:
             i.subject_id, i.hadm_id, i.stay_id,
             i.first_careunit, i.last_careunit, i.intime, i.outtime,
             i.los * 24.0 AS los_hours,
-            p.gender, p.anchor_age, p.anchor_year, p.dod,
+            p.gender, p.anchor_age, p.anchor_year, p.anchor_year_group, p.dod,
             a.admittime, a.dischtime, a.deathtime, a.race, a.hospital_expire_flag,
             (p.anchor_age + (EXTRACT(YEAR FROM a.admittime) - p.anchor_year)) AS age,
             ROW_NUMBER() OVER (PARTITION BY i.hadm_id ORDER BY i.intime) AS stay_rank
@@ -56,7 +57,8 @@ def _eligible_sql(cfg: CohortConfig) -> str:
             WHEN age BETWEEN 65 AND 74 THEN '65-74'
             ELSE '75-89'
         END AS age_band,
-        gender, race, admittime, dischtime, deathtime, dod, hospital_expire_flag
+        gender, race, anchor_year_group, admittime, dischtime, deathtime, dod,
+        hospital_expire_flag
     FROM base
     WHERE age BETWEEN {cfg.min_age} AND {cfg.max_age}
       AND los_hours >= {cfg.min_los_hours}

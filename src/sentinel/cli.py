@@ -128,10 +128,36 @@ def _todo(phase: str) -> None:
     raise typer.Exit(code=2)
 
 
+@app.command("build-partition")
+def build_partition_cmd(
+    mode: str = typer.Option(None, help="Override cohort mode: dev | full."),
+) -> None:
+    """Phase 2: assign train/val/test (temporal) + external-site partition."""
+    from .features.partition import run as run_partition
+
+    cohort = CohortConfig.load()
+    if mode:
+        cohort = CohortConfig(**{**cohort.__dict__, "mode": mode})
+    with stage("build-partition"):
+        run_partition(cohort, LabelConfig.load())
+
+
 @app.command("build-features")
-def build_features() -> None:
-    """Phase 2: hourly feature tensors with missingness indicators."""
-    _todo("Phase 2")
+def build_features(
+    mode: str = typer.Option(None, help="Override cohort mode: dev | full."),
+) -> None:
+    """Phase 2: hourly per-organ feature tensors (partition + features)."""
+    from .config import FeatureConfig
+    from .features.build import run as run_features
+    from .features.partition import run as run_partition
+
+    cohort = CohortConfig.load()
+    if mode:
+        cohort = CohortConfig(**{**cohort.__dict__, "mode": mode})
+    lcfg, fcfg = LabelConfig.load(), FeatureConfig.load()
+    with stage("build-features"):
+        run_partition(cohort, lcfg)
+        run_features(cohort, lcfg, fcfg)
 
 
 @app.command("train-baselines")
