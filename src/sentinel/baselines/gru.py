@@ -71,3 +71,27 @@ def predict_organ_ensemble(models: dict, df, split: str) -> np.ndarray:
         ds = EpisodeSeqDataset(df[df["split"] == split], cols)
         per_organ.append(predict_seq(model, ds))
     return np.maximum.reduce(per_organ)
+
+
+# ----- control: ensembling WITHOUT organ decomposition -----
+def train_joint_ensemble(df, feature_cols, pos_weight, seed=0, n=6, hidden=48, epochs=25):
+    """Control for the decomposition claim: `n` GRUs on the SAME joint feature
+    vector (diverse seeds) + max-combine. Same capacity and max-rule as the organ
+    ensemble but NO organ split — isolates ensembling from decomposition."""
+    tr = EpisodeSeqDataset(df[df["split"] == "train"], feature_cols)
+    va = EpisodeSeqDataset(df[df["split"] == "val"], feature_cols)
+    models = []
+    for i in range(n):
+        m = GRUClassifier(len(feature_cols), hidden=hidden)
+        log.info("    joint-ensemble: member %d/%d", i + 1, n)
+        models.append(train_seq(m, tr, va, pos_weight, epochs=epochs, seed=seed * 100 + i))
+    return models
+
+
+def predict_joint_ensemble(models: list, df, split: str, feature_cols, drop_cols=()) -> np.ndarray:
+    sub = df[df["split"] == split].copy()
+    for c in drop_cols:
+        if c in sub.columns:
+            sub[c] = 0.0
+    ds = EpisodeSeqDataset(sub, feature_cols)
+    return np.maximum.reduce([predict_seq(m, ds) for m in models])
