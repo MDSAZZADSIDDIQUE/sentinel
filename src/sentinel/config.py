@@ -123,6 +123,10 @@ class MARLConfig:
     eval_every: int = 10
     seed: int = 0
     ablation: str = "full"        # full | no_measurement | physiology
+    # Experiment: condition the actor on its own alert history (already-alerted,
+    # hours-since-last-alarm) via a sequential rollout. If ≈ the observation-only
+    # policy, the fixed-trajectory one-forward-pass simplification is justified.
+    action_conditioned: bool = False
 
     @classmethod
     def load(cls, name: str = "marl") -> "MARLConfig":

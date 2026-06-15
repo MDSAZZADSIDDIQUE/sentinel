@@ -182,6 +182,7 @@ def train_baselines(
 def train_marl(
     mode: str = typer.Option(None, help="Override cohort mode: dev | full."),
     seeds: int = typer.Option(3, help="Number of seeds."),
+    updates: int = typer.Option(None, help="Override PPO updates (e.g. 300 for full)."),
     algos: str = typer.Option("mappo,ippo", help="Comma list: mappo,ippo,qmix."),
 ) -> None:
     """Phase 4: SENTINEL-MAPPO vs IPPO control (CTDE MARL)."""
@@ -191,8 +192,11 @@ def train_marl(
     cohort = CohortConfig.load()
     if mode:
         cohort = CohortConfig(**{**cohort.__dict__, "mode": mode})
+    mcfg = MARLConfig.load()
+    if updates:
+        mcfg = MARLConfig(**{**mcfg.__dict__, "updates": updates})
     with stage("train-marl"):
-        run_marl(cohort, MARLConfig.load(), seeds=tuple(range(seeds)),
+        run_marl(cohort, mcfg, seeds=tuple(range(seeds)),
                  algos=tuple(a.strip() for a in algos.split(",")))
 
 
