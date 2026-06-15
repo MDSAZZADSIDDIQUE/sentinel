@@ -182,6 +182,39 @@ All raw tables are gzipped CSV under `mimic-iv-3.1/{hosp,icu}/`. Schemas verifie
   + shared context; team alert = max over agents; ramped early-warning reward
   (lead-time bonus, miss penalty, false-alarm + per-escalate cost).
 
+## Scientific framing (LOCKED — for the paper, Phase 8)
+- **This is policy-gradient optimization of a non-differentiable clinical utility
+  over EXOGENOUS observation sequences — not dynamics-learning / decision-under-
+  environment-uncertainty RL.** Alerting doesn't perturb the patient, so the
+  observation trajectory is exogenous and the reward of *any* action sequence is
+  exactly computable from the record → no off-policy-evaluation, no counterfactual
+  estimation, no distribution-shift correction. PPO is justified by (a) the utility
+  (event costs, lead-time bonus, miss penalty) being non-differentiable, and (b)
+  needing a parametric obs→action policy that **generalizes to unseen patients**
+  (exact rewards computable on train trajectories, not on held-out patients).
+- **Centralized-critic motivation is weak here**: no agent perturbs the
+  environment; the only organ coupling is the max-combine + shared team reward. So
+  MAPPO-over-IPPO tests only whether a centralized value estimate improves credit
+  assignment under reward-only coupling — **MAPPO ≈ IPPO is a likely, honest
+  outcome.** Paper leads with **decomposition + interpretability + missing-signal
+  robustness + federated privacy**; coordination is a *measured (possibly null)
+  secondary* result.
+- **Team risk score = max-organ P(escalate)** (NOT the critic value, which
+  estimates utility-shaped return, not onset risk). Puts SENTINEL on the same
+  footing as the baselines for AUPRC + threshold. Caveat: the policy is trained
+  for utility not calibration → P(escalate) may be miscalibrated; fine for
+  rank-based AUPRC, interpret Brier accordingly, post-hoc calibrate if reporting
+  calibration as a deployment property.
+- **Known approximation:** the observation-only actor can't condition on its own
+  alert history, yet the reward couples actions over time (refractory, one-time
+  lead bonus, terminal miss) — so it can't exactly represent "alert once then
+  suppress." Tested on dev via an action-history-conditioned actor variant; if
+  ≈ the observation-only policy, the simplification is empirically justified.
+- **Benchmarks:** MARL must at least match the best baseline (XGBoost) on AUPRC,
+  not only beat IPPO; if it wins only on auxiliary dimensions, say so plainly.
+  3-way ablation gaps (leak/timing) are within noise on dev (~400 pos) — re-state
+  with CIs on the full cohort before claiming "half behavior, half timing".
+
 ## Open assumptions to revisit
 - Default prediction horizon `H = 6h`; SOFA worst-value rolling window 24h.
 - `min_los_hours = 6`, adults 18–89, first ICU stay per admission only.
