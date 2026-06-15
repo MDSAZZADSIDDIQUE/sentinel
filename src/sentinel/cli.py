@@ -216,6 +216,22 @@ def robustness(
         run_robust(cohort, MARLConfig.load(), seeds=tuple(range(seeds)))
 
 
+@app.command("train-federated")
+def train_federated_cmd(
+    mode: str = typer.Option(None, help="Override cohort mode: dev | full."),
+    seeds: int = typer.Option(3, help="Number of seeds."),
+    rounds: int = typer.Option(15, help="FedAvg rounds."),
+) -> None:
+    """Phase 5: federated (FedAvg by care unit) vs centralized — the privacy cost."""
+    from .federated.fedavg import run as run_fed
+
+    cohort = CohortConfig.load()
+    if mode:
+        cohort = CohortConfig(**{**cohort.__dict__, "mode": mode})
+    with stage("train-federated"):
+        run_fed(cohort, seeds=tuple(range(seeds)), rounds=rounds)
+
+
 @app.command("evaluate")
 def evaluate() -> None:
     """Phase 6: full evaluation matrix with bootstrap CIs."""
