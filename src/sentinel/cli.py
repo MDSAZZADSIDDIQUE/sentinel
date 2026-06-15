@@ -200,6 +200,22 @@ def train_marl(
                  algos=tuple(a.strip() for a in algos.split(",")))
 
 
+@app.command("robustness")
+def robustness(
+    mode: str = typer.Option(None, help="Override cohort mode: dev | full."),
+    seeds: int = typer.Option(3, help="Number of seeds."),
+) -> None:
+    """Phase 5: missing-signal robustness (drop one organ; SENTINEL vs GRU-single)."""
+    from .config import MARLConfig
+    from .eval.robustness import run as run_robust
+
+    cohort = CohortConfig.load()
+    if mode:
+        cohort = CohortConfig(**{**cohort.__dict__, "mode": mode})
+    with stage("robustness"):
+        run_robust(cohort, MARLConfig.load(), seeds=tuple(range(seeds)))
+
+
 @app.command("evaluate")
 def evaluate() -> None:
     """Phase 6: full evaluation matrix with bootstrap CIs."""
