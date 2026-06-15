@@ -179,9 +179,21 @@ def train_baselines(
 
 
 @app.command("train-marl")
-def train_marl() -> None:
-    """Phase 4: organ-system MAPPO / QMIX agents."""
-    _todo("Phase 4")
+def train_marl(
+    mode: str = typer.Option(None, help="Override cohort mode: dev | full."),
+    seeds: int = typer.Option(3, help="Number of seeds."),
+    algos: str = typer.Option("mappo,ippo", help="Comma list: mappo,ippo,qmix."),
+) -> None:
+    """Phase 4: SENTINEL-MAPPO vs IPPO control (CTDE MARL)."""
+    from .config import MARLConfig
+    from .eval.run_marl import run as run_marl
+
+    cohort = CohortConfig.load()
+    if mode:
+        cohort = CohortConfig(**{**cohort.__dict__, "mode": mode})
+    with stage("train-marl"):
+        run_marl(cohort, MARLConfig.load(), seeds=tuple(range(seeds)),
+                 algos=tuple(a.strip() for a in algos.split(",")))
 
 
 @app.command("evaluate")

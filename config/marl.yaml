@@ -1,0 +1,18 @@
+# SENTINEL MARL (Phase 4). MAPPO = centralized critic (coordination); IPPO =
+# decentralized per-organ critics (the control). Only the critic differs.
+algo: mappo            # set per-run by the runner (mappo | ippo | qmix)
+hidden_actor: 64
+hidden_critic: 128
+lr: 0.0003
+gamma: 0.99
+gae_lambda: 0.95
+clip: 0.2
+entropy_coef: 0.01
+value_coef: 0.5
+ppo_epochs: 4
+updates: 80            # dev-light; scale up for the full-cohort run
+batch_episodes: 128
+minibatch_episodes: 64
+grad_clip: 1.0
+eval_every: 20
+ablation: full

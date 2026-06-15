@@ -101,6 +101,39 @@ class FeatureConfig:
 
 
 @dataclass(frozen=True)
+class MARLConfig:
+    """SENTINEL MARL (MAPPO/IPPO/QMIX) settings (config/marl.yaml)."""
+
+    algo: str = "mappo"            # mappo | ippo | qmix
+    # MAPPO uses a centralized critic over the joint state; IPPO uses per-organ
+    # decentralized critics (the coordination control — the ONLY difference).
+    hidden_actor: int = 64
+    hidden_critic: int = 128
+    lr: float = 3e-4
+    gamma: float = 0.99
+    gae_lambda: float = 0.95
+    clip: float = 0.2
+    entropy_coef: float = 0.01
+    value_coef: float = 0.5
+    ppo_epochs: int = 4
+    updates: int = 60             # PPO updates (dev-light); scale for final
+    batch_episodes: int = 128
+    minibatch_episodes: int = 64
+    grad_clip: float = 1.0
+    eval_every: int = 10
+    seed: int = 0
+    ablation: str = "full"        # full | no_measurement | physiology
+
+    @classmethod
+    def load(cls, name: str = "marl") -> "MARLConfig":
+        try:
+            data = read_yaml(name)
+        except FileNotFoundError:
+            return cls()
+        return cls(**_filter_known(cls, data))
+
+
+@dataclass(frozen=True)
 class LabelConfig:
     """Sepsis-3 / SOFA derivation settings (config/labels.yaml)."""
 
