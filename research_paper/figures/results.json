@@ -36,5 +36,10 @@
     "_note": "MAPPO vs IPPO — measured null (centralized critic adds nothing under exogenous dynamics)",
     "MAPPO":  {"test": 0.063, "external": 0.051},
     "IPPO":   {"test": 0.066, "external": 0.049}
+  },
+  "federated": {
+    "_note": "FedAvg over 8 non-IID care-unit sites (15 rounds) vs centralized. Honest cost, not free.",
+    "Centralized": {"test": 0.212, "external": 0.290},
+    "Federated":   {"test": 0.121, "external": 0.237}
   }
 }
