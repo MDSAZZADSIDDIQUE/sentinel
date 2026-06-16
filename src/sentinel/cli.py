@@ -241,7 +241,10 @@ def evaluate() -> None:
 @app.command()
 def figures() -> None:
     """Phase 6: generate paper figures into research_paper/figures/."""
-    _todo("Phase 6")
+    from .viz.figures import run as run_figs
+
+    with stage("figures"):
+        run_figs()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,40 @@
+{
+  "_note": "Headline numbers transcribed from outputs/reports/*.md (gitignored, PHI-adjacent). Committed here so figures regenerate without re-running models. Full cohort, 3-5 seeds, 95% CI bootstrapped over stays.",
+  "no_skill": {"test": 0.049, "external": 0.057},
+  "discrimination": {
+    "_cols": "model -> {split -> [auprc, lo, hi]}",
+    "NEWS2":               {"test": [0.066, 0.061, 0.072], "external": [0.051, 0.048, 0.054]},
+    "XGBoost":             {"test": [0.115, 0.104, 0.128], "external": [0.242, 0.224, 0.263]},
+    "GRU-single":          {"test": [0.205, 0.186, 0.225], "external": [0.283, 0.264, 0.305]},
+    "JointEnsemble-6":     {"test": [0.202, 0.184, 0.221], "external": [0.283, 0.270, 0.312]},
+    "SENTINEL (organ)":    {"test": [0.257, 0.233, 0.283], "external": [0.265, 0.248, 0.286]},
+    "SENTINEL-MAPPO":      {"test": [0.063, 0.058, 0.069], "external": [0.051, 0.048, 0.055]},
+    "SENTINEL-IPPO":       {"test": [0.066, 0.061, 0.072], "external": [0.049, 0.045, 0.053]}
+  },
+  "robustness_mean_delta": {
+    "_cols": "model -> {split -> mean AUPRC drop when one organ is blinded}",
+    "SENTINEL (organ)":  {"test": -0.001, "external": -0.002},
+    "JointEnsemble-6":   {"test": -0.030, "external": -0.056},
+    "GRU-single":        {"test": -0.028, "external": -0.041}
+  },
+  "robustness_per_organ_external": {
+    "_cols": "organ -> {model -> AUPRC with that organ blinded}; baseline (none) included",
+    "none":           {"SENTINEL (organ)": 0.258, "JointEnsemble-6": 0.283, "GRU-single": 0.271},
+    "respiratory":    {"SENTINEL (organ)": 0.228, "JointEnsemble-6": 0.179, "GRU-single": 0.208},
+    "cardiovascular": {"SENTINEL (organ)": 0.273, "JointEnsemble-6": 0.173, "GRU-single": 0.176},
+    "neurologic":     {"SENTINEL (organ)": 0.259, "JointEnsemble-6": 0.213, "GRU-single": 0.225},
+    "renal":          {"SENTINEL (organ)": 0.256, "JointEnsemble-6": 0.243, "GRU-single": 0.244},
+    "coagulation":    {"SENTINEL (organ)": 0.259, "JointEnsemble-6": 0.271, "GRU-single": 0.256},
+    "hepatic":        {"SENTINEL (organ)": 0.261, "JointEnsemble-6": 0.283, "GRU-single": 0.271}
+  },
+  "ablation_test_auprc": {
+    "_cols": "model -> {full, no_measurement (drop measurement, keep timing), physiology (drop both)}",
+    "XGBoost":    {"full": 0.115, "no_measurement": 0.114, "physiology": 0.091},
+    "GRU-single": {"full": 0.205, "no_measurement": 0.202, "physiology": 0.129}
+  },
+  "coordination": {
+    "_note": "MAPPO vs IPPO — measured null (centralized critic adds nothing under exogenous dynamics)",
+    "MAPPO":  {"test": 0.063, "external": 0.051},
+    "IPPO":   {"test": 0.066, "external": 0.049}
+  }
+}
