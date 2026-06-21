@@ -1,0 +1,187 @@
+# eICU-CRDB v2.0 -> SENTINEL canonical variable harmonization map (Phase 9).
+#
+# Purpose: map every canonical SENTINEL variable (the MIMIC feature schema) onto
+# its eICU source table / column / label, with units and plausibility ranges,
+# so the eICU cohort/SOFA/feature builders reproduce the EXACT MIMIC feature
+# schema (identical organ grouping, names, units). Nothing here is hardcoded
+# blindly: every labname / drugname / celllabel / column and its unit was
+# VERIFIED against the real eICU value distributions on 2026-06-20 via
+# `scripts/eicu_probe.py` (mirrors the Phase-1 itemid-resolution discipline).
+#
+# Target schema = data/features/feature_manifest_full.json (do not drift).
+
+meta:
+  database: "eICU Collaborative Research Database v2.0"
+  verified: "2026-06-20 (scripts/eicu_probe.py cheap+heavy, vs real distributions)"
+  # TIME IS IN OFFSETS (minutes), NOT timestamps. Every `*offset` column is
+  # minutes relative to unit admission (unitadmittime24 == offset 0).
+  # hospitaladmitoffset is negative (hospital admit precedes unit admit).
+  # hr := floor(offset / 60). los_hours := unitdischargeoffset / 60.
+  time_unit: "minutes (offset from unit admit); hr = floor(offset/60)"
+  keys:
+    stay: patientunitstayid       # one ICU (unit) stay  -> our stay_id
+    hosp_stay: patienthealthsystemstayid  # one hospital stay -> our hadm_id
+    patient: uniquepid            # one patient          -> our subject_id
+    site: hospitalid              # one hospital         -> federation site
+  # eICU spans 2014-2015; calendar dates are de-identified. All eICU stays are
+  # the EXTERNAL split (no temporal train/val/test; frozen-model evaluation).
+  notes:
+    - "200,859 unit stays / 139,367 patients / 208 hospitals (160 with >=200 stays)."
+    - "Continuous vitals from vitalPeriodic (numeric cols); NIBP from vitalAperiodic; GCS from nurseCharting; chemistry/gas from lab; urine from intakeOutput; vasopressors from infusionDrug; vent from respiratoryCare."
+
+# --- demographics / cohort (patient table) --------------------------------
+patient:
+  table: patient
+  age:
+    column: age                   # VARCHAR! values '0'..'89', '> 89', None
+    parse: "'> 89' (and '>89') -> 90; numeric string -> int; else NULL"
+    censored_elderly: ">89 band coded as '> 89' -> parsed to 90 and RETAINED (MIMIC excludes its >89 anchor_age=91 band; documented cohort difference)."
+  gender: {column: gender, map: {Male: M, Female: F}, other: U}  # else (None/Unknown/Other) -> U
+  race: {column: ethnicity}       # -> our `race` column
+  site: {column: hospitalid}      # -> our `site` (stringified) + federation key
+  unittype: {column: unittype}    # Med-Surg ICU / MICU / CCU-CTICU / Neuro ICU / Cardiac ICU / SICU / CSICU / CTICU
+  los_hours: {column: unitdischargeoffset, transform: "/ 60.0"}
+  weight: {column: admissionweight, unit: kg}  # fallback weight for vaso ug/kg/min
+  mortality: {column: hospitaldischargestatus, expired_value: Expired}
+
+# --- continuous vitals: vitalPeriodic (offset = observationoffset) ---------
+# Numeric columns, ~every 5 min. Worst-in-hour aggregation per MIMIC SOFA.
+vitals_periodic:
+  table: vitalPeriodic
+  offset: observationoffset
+  variables:
+    heart_rate:   {column: heartrate,       unit: bpm,  range: [10, 300]}   # q[59,84,118]
+    resp_rate:    {column: respiration,      unit: /min, range: [0, 80]}     # q[11,19,32]
+    spo2:         {column: sao2,             unit: "%",  range: [50, 100]}   # q[91,97,100]
+    temp_c:       {column: temperature,      unit: C,    range: [25, 45]}    # q[35.7,37.3,38.8] (Celsius)
+    map:          {column: systemicmean,     unit: mmHg, range: [10, 250], role: arterial}  # q[58,78,109]
+    sbp:          {column: systemicsystolic, unit: mmHg, range: [20, 300], role: arterial}
+
+# --- non-invasive BP: vitalAperiodic (offset = observationoffset) ----------
+# MAP/SBP are COALESCED: arterial (vitalPeriodic) first, else NIBP here.
+vitals_aperiodic:
+  table: vitalAperiodic
+  offset: observationoffset
+  variables:
+    map:  {column: noninvasivemean,     unit: mmHg, range: [10, 250], role: nibp}   # q[56,79,113]
+    sbp:  {column: noninvasivesystolic, unit: mmHg, range: [20, 300], role: nibp}   # q[85,119,165]
+
+# --- chemistry / blood gas: lab (offset = labresultoffset) -----------------
+# Match labname case-insensitively (exact); value = labresult.
+labs:
+  table: lab
+  offset: labresultoffset
+  name_col: labname
+  value_col: labresult
+  variables:
+    pao2:            {labname: "paO2",             unit: "mm Hg", range: [10, 700]}   # q[53,96,359]
+    fio2:            {labname: "FiO2",             unit: "%",     range: [21, 100], note: "percent; >1 -> /100, clamp [0.21,1.0] (same as MIMIC)"}  # q[0.8,40,100]
+    platelets:       {labname: "platelets x 1000", unit: "K/mcL", range: [0, 2000]}   # q[58,197,435]
+    bilirubin_total: {labname: "total bilirubin",  unit: "mg/dL", range: [0, 100]}    # q[0.2,0.6,5.5]
+    creatinine:      {labname: "creatinine",       unit: "mg/dL", range: [0, 50]}     # q[0.46,1.0,4.76]
+    lactate:         {labname: "lactate",          unit: "mmol/L", range: [0, 50]}    # q[0.7,1.8,8.7]
+
+# --- GCS: nurseCharting (offset = nursingchartoffset) ----------------------
+# label = nursingchartcelltypevallabel = 'Glasgow coma score'; component in
+# nursingchartcelltypevalname; numeric value in nursingchartvalue.
+# Ventilation-aware GCS handled downstream (verbal=1 while vented -> restored).
+gcs:
+  table: nurseCharting
+  offset: nursingchartoffset
+  label_col: nursingchartcelltypevallabel
+  name_col: nursingchartcelltypevalname
+  value_col: nursingchartvalue
+  label_value: "Glasgow coma score"
+  variables:
+    gcs_eye:    {valname: "Eyes",      range: [1, 4]}   # 2.75M rows
+    gcs_verbal: {valname: "Verbal",    range: [1, 5]}   # 2.75M
+    gcs_motor:  {valname: "Motor",     range: [1, 6]}   # 2.75M
+    gcs_total:  {valname: "GCS Total", range: [3, 15]}  # 3.25M (cross-check / fallback)
+
+# --- urine output: intakeOutput (offset = intakeoutputoffset) --------------
+# value = cellvaluenumeric (mL). Include volume labels, EXCLUDE count/tally
+# labels (those are event counts 1..59, not mL).
+urine:
+  table: intakeOutput
+  offset: intakeoutputoffset
+  label_col: celllabel
+  value_col: cellvaluenumeric
+  include_like: ["urine", "foley", "void"]           # 'Urine','URINE CATHETER','Foley','Voided Amount',...
+  exclude_like: ["count", "occurrence", "incontinen", "number of", "unmeasured"]  # tallies, not volumes
+
+# --- vasopressors: infusionDrug (offset = infusionoffset) ------------------
+# CRITICAL: the dose UNIT is embedded in drugname's parenthetical, e.g.
+# 'Norepinephrine (mcg/kg/min)' | '(mcg/min)' | '(ml/hr)'. drugrate = numeric
+# rate; patientweight = per-row kg (fallback: cohort admissionweight).
+# 'norepinephrine' CONTAINS 'epinephrine' -> match norepinephrine/levophed
+# FIRST, then epinephrine. phenylephrine/vasopressin: feature channels only
+# (not SOFA-cardiovascular-scored, exactly as in MIMIC).
+vasopressors:
+  table: infusionDrug
+  offset: infusionoffset
+  name_col: drugname
+  rate_col: drugrate
+  weight_col: patientweight
+  # match order matters (precedence top->bottom; norepinephrine before epinephrine)
+  match:
+    - {drug: norepinephrine, like: ["norepinephrine", "levophed"]}
+    - {drug: epinephrine,    like: ["epinephrine", "adrenalin"]}   # only if not already norepi
+    - {drug: dopamine,       like: ["dopamine"]}
+    - {drug: dobutamine,     like: ["dobutamine"]}
+    - {drug: phenylephrine,  like: ["phenylephrine", "neosynephrine"]}
+    - {drug: vasopressin,    like: ["vasopressin"]}
+  dose_unit_from_name:        # substring in drugname parenthetical -> handling
+    "mcg/kg/min": direct      # drugrate already ug/kg/min
+    "mcg/min": per_weight     # drugrate / weight -> ug/kg/min
+    "units/min": units        # vasopressin (feature only, not dose-scored)
+    "units/hr": units
+    "ml/hr": presence         # volumetric: no derivable dose -> presence only
+    "": presence              # unitless: presence only
+  # effective ug/kg/min for PRESENCE-ONLY records (drug running, dose unknown).
+  # Combined via max() with any known dose -> never downgrades a known dose;
+  # lands a running catecholamine on its conservative SOFA-cardiovascular floor.
+  presence_floor_dose:
+    norepinephrine: 0.05      # -> cv score 3  (0 < d <= 0.1)
+    epinephrine:    0.05      # -> cv score 3
+    dopamine:       3.0       # -> cv score 2  (0 < d <= 5)
+    dobutamine:     1.0       # -> cv score 2  (dobutamine any > 0)
+    phenylephrine:  0.5       # feature channel only
+    vasopressin:    0.03      # feature channel only
+
+# --- mechanical ventilation: respiratoryCare ------------------------------
+# Vent intervals from ventstartoffset..ventendoffset (minutes). When
+# ventendoffset <= ventstartoffset (0/ongoing), use respcarestatusoffset as the
+# observed-active time. A stay-hour overlapping any interval is ventilated
+# (then ffilled 12h like MIMIC). Modifies respiratory SOFA cap + GCS-verbal.
+vent:
+  table: respiratoryCare
+  start_col: ventstartoffset
+  end_col: ventendoffset
+  observed_col: respcarestatusoffset
+  cross_check: {table: apacheApsVar, column: vent}   # per-stay 0/1 first-24h flag (report only)
+
+# --- suspicion of infection (Sepsis-3) ------------------------------------
+# Reuses the Seymour-2016 abx<->culture pairing (config/labels.yaml windows).
+# Both keyed directly to patientunitstayid (no hadm join needed).
+suspicion:
+  antibiotics:
+    table: medication
+    name_col: drugname           # branded+conc, e.g. 'VANCOMYCIN HCL 1000 MG IV SOLR','ZOSYN','ANCEF'
+    time_col: drugstartoffset
+    match: "config/antibiotics.yaml names (case-insensitive substring) + eicu_extra below"
+    eicu_extra: [ancef, primaxin, ticarcillin, timentin, maxipime, fortaz, rocephin, levaquin, cubicin, tygacil]
+    route_col: routeadmin        # messy free-text; no eye/ear codes -> no route exclusion (documented)
+  cultures:
+    table: microLab
+    time_col: culturetakenoffset
+    any_row: true                # any culture event = a culture order
+    coverage_caveat: "SPARSE: only ~2,923 / 200,859 stays (1.4%) have ANY microLab row vs MIMIC's dense microbiologyevents. Suspicion will lean heavily on antibiotics; documented as the headline eICU label-fidelity limitation."
+
+# --- variables NOT separately sourced (derived / shared) -------------------
+derived:
+  pf_ratio: "pao2 / fio2_fraction (label + feature; FiO2 %/100, clamp [0.21,1.0])"
+  sf_ratio: "min(spo2, spo2_sf_cap=97) / fio2_fraction (feature only; room-air FiO2=0.21 default)"
+  gcs_total: "gcs_eye + gcs_verbal(vent-adjusted) + gcs_motor (fallback to 'GCS Total' valname)"
+  age_z: "(age - MIMIC train mean) / MIMIC train std  [normalizer from Phase 2, NEVER refit on eICU]"
+  sex_female: "(gender == 'F')"
+  hour_idx: "(hr - MIMIC train mean) / MIMIC train std"

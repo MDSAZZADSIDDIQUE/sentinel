@@ -58,6 +58,11 @@ def mimic(table: str) -> str:
     return src(PATHS.mimic_csv(table))
 
 
+def eicu(table: str) -> str:
+    """SQL fragment scanning a raw eICU table by logical name (Phase 9)."""
+    return src(PATHS.eicu_csv(table))
+
+
 def count_rows(con: duckdb.DuckDBPyConnection, table: str) -> int:
     """Row count of a raw MIMIC table without materializing it."""
     return con.execute(f"SELECT COUNT(*) FROM {mimic(table)}").fetchone()[0]

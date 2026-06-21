@@ -4,6 +4,8 @@
 # ============================================================================
 # Anchored to repo root so they don't match src/sentinel/data, src/sentinel/env
 /mimic-iv-3.1/
+# eICU CRDB v2.0 (PhysioNet DUA) — Phase 9 (gitignore has no inline comments; keep on own line)
+/eicu-collaborative-research-database-2.0/
 /data/
 /outputs/
 **/*.parquet

@@ -122,6 +122,97 @@ def cohort_report(
         run_report(cohort, LabelConfig.load())
 
 
+# --- Phase 9: eICU external validation ------------------------------------
+# eICU stays are all the EXTERNAL split (frozen-model evaluation). We construct
+# CohortConfig(mode="eicu") directly (NOT from cohort.yaml, which is mode=dev);
+# inclusion-criteria defaults (adults 18+, LOS>=6h, first-stay) match MIMIC.
+def _eicu_cfg() -> CohortConfig:
+    return CohortConfig(mode="eicu")
+
+
+@app.command("eicu-cohort")
+def eicu_cohort() -> None:
+    """Phase 9: build the eICU external cohort from the `patient` table."""
+    from .data.eicu_cohort import run as run_eicu_cohort
+
+    with stage("eicu-cohort"):
+        run_eicu_cohort(_eicu_cfg())
+
+
+@app.command("eicu-labels")
+def eicu_labels(
+    rebuild_sofa: bool = typer.Option(False, help="Force recompute of hourly SOFA."),
+) -> None:
+    """Phase 9: eICU hourly SOFA + suspicion + Sepsis-3 + three-way split."""
+    from .labels.eicu_pipeline import run as run_eicu_labels
+
+    with stage("eicu-labels"):
+        run_eicu_labels(_eicu_cfg(), LabelConfig.load(), rebuild_sofa=rebuild_sofa)
+
+
+@app.command("eicu-report")
+def eicu_report() -> None:
+    """Phase 9: eICU cohort/label report (coverage + prevalence vs MIMIC)."""
+    from .labels.eicu_report import run as run_eicu_report
+
+    with stage("eicu-report"):
+        run_eicu_report(_eicu_cfg(), LabelConfig.load())
+
+
+@app.command("eicu-features")
+def eicu_features() -> None:
+    """Phase 9: harmonized eICU hourly features (exact MIMIC schema, FROZEN normalizer)."""
+    from .config import FeatureConfig
+    from .features.eicu_build import run as run_eicu_features
+
+    with stage("eicu-features"):
+        run_eicu_features(_eicu_cfg(), LabelConfig.load(), FeatureConfig.load())
+
+
+@app.command("eicu-evaluate")
+def eicu_evaluate(
+    models: str = typer.Option("NEWS2,XGBoost,GRU-single,JointEnsemble-6,SENTINEL",
+                               help="Comma list of frozen models to externally validate."),
+    seeds: int = typer.Option(3, help="Seeds for stochastic models."),
+    marl_updates: int = typer.Option(None, help="Override SENTINEL-MAPPO PPO updates."),
+    n_boot: int = typer.Option(200, help="Bootstrap resamples for AUPRC CIs."),
+) -> None:
+    """Phase 9 Step 5: externally validate FROZEN MIMIC models on the eICU split."""
+    from .config import FeatureConfig
+    from .eval.eicu_external import run as run_eicu_eval
+
+    mlist = tuple(m.strip() for m in models.split(",") if m.strip())
+    with stage("eicu-evaluate"):
+        run_eicu_eval(_eicu_cfg(), CohortConfig(mode="full"), FeatureConfig.load(),
+                      seeds=tuple(range(seeds)), models=mlist, marl_updates=marl_updates,
+                      n_boot=n_boot)
+
+
+@app.command("eicu-robustness")
+def eicu_robustness_cmd(
+    seeds: int = typer.Option(3, help="Seeds for the (re-trained, frozen) supervised models."),
+) -> None:
+    """Phase 9 Step 6a: per-organ blinding curve — robustness TRANSFER to eICU."""
+    from .config import MARLConfig
+    from .eval.eicu_robustness import run as run_eicu_robust
+
+    with stage("eicu-robustness"):
+        run_eicu_robust(_eicu_cfg(), CohortConfig(mode="full"), MARLConfig.load(),
+                        seeds=tuple(range(seeds)))
+
+
+@app.command("eicu-federated")
+def eicu_federated_cmd(
+    seeds: int = typer.Option(3, help="Number of seeds (data split is fixed across seeds)."),
+    rounds: int = typer.Option(15, help="FedAvg rounds."),
+) -> None:
+    """Phase 9 Step 6b: federated vs centralized across REAL eICU hospitals (hospitalid)."""
+    from .federated.eicu_fedavg import run as run_eicu_fed
+
+    with stage("eicu-federated"):
+        run_eicu_fed(_eicu_cfg(), seeds=tuple(range(seeds)), rounds=rounds)
+
+
 # --- later-phase placeholders (wired as phases land) ----------------------
 def _todo(phase: str) -> None:
     typer.echo(f"Not implemented yet — arrives in {phase}.")

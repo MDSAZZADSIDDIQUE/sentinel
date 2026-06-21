@@ -27,6 +27,8 @@ def _env_path(var: str, default: Path) -> Path:
 class Paths:
     repo_root: Path = _REPO_ROOT
     mimic_root: Path = field(default_factory=lambda: _env_path("SENTINEL_MIMIC_ROOT", _REPO_ROOT / "mimic-iv-3.1"))
+    eicu_root: Path = field(default_factory=lambda: _env_path(
+        "SENTINEL_EICU_ROOT", _REPO_ROOT / "eicu-collaborative-research-database-2.0"))
     data_root: Path = field(default_factory=lambda: _env_path("SENTINEL_DATA_ROOT", _REPO_ROOT / "data"))
     output_root: Path = field(default_factory=lambda: _env_path("SENTINEL_OUTPUT_ROOT", _REPO_ROOT / "outputs"))
     config_root: Path = _REPO_ROOT / "config"
@@ -95,6 +97,31 @@ class Paths:
             raise KeyError(f"Unknown MIMIC table '{table}'. Known: {sorted(self._MIMIC_TABLES)}")
         group, fname = self._MIMIC_TABLES[table]
         return self.mimic_root / group / fname
+
+    # --- raw eICU csv.gz locations (flat directory; CRDB v2.0) ------------
+    # Phase 9 external validation. Times are *offsets* (minutes from unit admit),
+    # not timestamps; keys are patientunitstayid (stay) / uniquepid (patient) /
+    # hospitalid (site). Only tables we touch are listed.
+    _EICU_TABLES = {
+        "patient": "patient.csv.gz",
+        "lab": "lab.csv.gz",
+        "nurseCharting": "nurseCharting.csv.gz",
+        "vitalPeriodic": "vitalPeriodic.csv.gz",
+        "vitalAperiodic": "vitalAperiodic.csv.gz",
+        "infusionDrug": "infusionDrug.csv.gz",
+        "medication": "medication.csv.gz",
+        "microLab": "microLab.csv.gz",
+        "intakeOutput": "intakeOutput.csv.gz",
+        "respiratoryCare": "respiratoryCare.csv.gz",
+        "respiratoryCharting": "respiratoryCharting.csv.gz",
+        "apacheApsVar": "apacheApsVar.csv.gz",
+        "hospital": "hospital.csv.gz",
+    }
+
+    def eicu_csv(self, table: str) -> Path:
+        if table not in self._EICU_TABLES:
+            raise KeyError(f"Unknown eICU table '{table}'. Known: {sorted(self._EICU_TABLES)}")
+        return self.eicu_root / self._EICU_TABLES[table]
 
     def parquet(self, table: str) -> Path:
         """Path to a converted/derived parquet (file or directory)."""
