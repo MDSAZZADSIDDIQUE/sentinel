@@ -47,6 +47,26 @@ def predict_gru(model, df, split, feature_cols) -> np.ndarray:
     return predict_seq(model, ds)
 
 
+def train_gru_masked(df, feature_cols, manifest: dict, pos_weight, seed=0,
+                     hidden=96, epochs=25, mask_prob: float = 0.5):
+    """Monolithic GRU trained WITH organ-block dropout augmentation — the
+    missingness-aware control for the robustness claim. Same architecture and
+    inputs as `train_gru`, but during training each episode has prob `mask_prob`
+    of having one random organ's columns zeroed (the exact perturbation the
+    blinding harness applies at test time). If this still degrades under blinding
+    while the organ ensemble does not, robustness is a property of the
+    DECOMPOSITION, not of missingness-specific training."""
+    tr = EpisodeSeqDataset(df[df["split"] == "train"], feature_cols)
+    va = EpisodeSeqDataset(df[df["split"] == "val"], feature_cols)
+    idx = {c: i for i, c in enumerate(feature_cols)}
+    groups = [[idx[c] for c in manifest[o] if c in idx] for o in ORGAN_SYSTEMS]
+    groups = [g for g in groups if g]
+    model = GRUClassifier(len(feature_cols), hidden=hidden)
+    log.info("    GRU-masked: %d organ groups, mask_prob=%.2f", len(groups), mask_prob)
+    return train_seq(model, tr, va, pos_weight, epochs=epochs, seed=seed,
+                     mask_groups=groups, mask_prob=mask_prob)
+
+
 # --------------------------- independent ensemble ---------------------------
 def train_organ_ensemble(df, manifest: dict, pos_weight: float, seed: int = 0,
                          hidden: int = 48, epochs: int = 25):

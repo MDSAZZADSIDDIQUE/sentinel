@@ -54,19 +54,21 @@ def fig_discrimination(d):
 def fig_robustness(d):
     per = d["robustness_per_organ_external"]
     organs = ["none", "respiratory", "cardiovascular", "neurologic", "renal", "coagulation", "hepatic"]
-    models = ["SENTINEL (organ)", "JointEnsemble-6", "GRU-single"]
-    colors = {"SENTINEL (organ)": SENTINEL_C, "JointEnsemble-6": "#1f77b4", "GRU-single": "#888"}
+    # GRU-masked = monolithic GRU trained WITH organ-dropout augmentation (the
+    # missingness-aware control): orange, distinct from the plain monolith (grey).
+    models = ["SENTINEL (organ)", "JointEnsemble-6", "GRU-single", "GRU-masked"]
+    colors = {"SENTINEL (organ)": SENTINEL_C, "JointEnsemble-6": "#1f77b4",
+              "GRU-single": "#888", "GRU-masked": "#ff7f0e"}
     fig, ax = plt.subplots(figsize=(8.5, 3.6))
-    x = range(len(organs)); w = 0.26
+    x = range(len(organs)); w = 0.20
     for i, m in enumerate(models):
-        ax.bar([xi + (i - 1) * w for xi in x], [per[o][m] for o in organs], w,
+        ax.bar([xi + (i - 1.5) * w for xi in x], [per[o][m] for o in organs], w,
                label=m, color=colors[m])
     ax.set_xticks(list(x)); ax.set_xticklabels(["(none)"] + organs[1:], rotation=30, ha="right")
     ax.set_ylabel("external AUPRC"); ax.set_xlabel("organ blinded at test time")
-    ax.set_title("Missing-signal robustness: only organ-decomposition degrades gracefully")
-    ax.legend(fontsize=8)
-    ax.annotate("decomposed holds;\nensemble & monolithic collapse", (2, 0.30), fontsize=8,
-                ha="center", color=SENTINEL_C)
+    ax.set_ylim(0, 0.36)
+    ax.set_title("Missing-signal robustness is structural, not just missingness-aware training")
+    ax.legend(fontsize=8, ncol=4, loc="upper center")
     _save(fig, "fig_robustness")
 
 

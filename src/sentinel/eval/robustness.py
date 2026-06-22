@@ -43,13 +43,14 @@ def _ensemble_predict_drop(models, df, split, drop_organ):
     return np.maximum.reduce(per)
 
 
-MODEL_ORDER = ("SENTINEL-Ensemble", "JointEnsemble-6", "GRU-single")
+MODEL_ORDER = ("SENTINEL-Ensemble", "JointEnsemble-6", "GRU-single", "GRU-masked")
 
 
 def run(cfg: CohortConfig | None = None, mcfg: MARLConfig | None = None,
         seeds=(0, 1, 2), splits=("test", "external")) -> None:
     from ..baselines.gru import (predict_joint_ensemble, predict_organ_ensemble,
-                                 train_gru, train_joint_ensemble, train_organ_ensemble)
+                                 train_gru, train_gru_masked, train_joint_ensemble,
+                                 train_organ_ensemble)
 
     cfg = cfg or CohortConfig.load()
     mcfg = mcfg or MARLConfig.load()
@@ -65,12 +66,13 @@ def run(cfg: CohortConfig | None = None, mcfg: MARLConfig | None = None,
     # GRU-single = monolithic deep model.
     res: dict[tuple, list] = {}
     for seed in seeds:
-        log.info("  seed %d: SENTINEL-Ensemble + JointEnsemble-6 + GRU-single", seed)
+        log.info("  seed %d: SENTINEL-Ensemble + JointEnsemble-6 + GRU-single + GRU-masked", seed)
         tr = load_split(cfg, "train", df=df, ablation=mcfg.ablation)
         pw = (len(tr.y) - int(tr.y.sum())) / max(int(tr.y.sum()), 1)
         ens = train_organ_ensemble(df, tr.manifest, pw, seed=seed)
         je = train_joint_ensemble(df, tr.feature_names, pw, seed=seed)
         gm = train_gru(df, tr.feature_names, pw, seed=seed)
+        gmm = train_gru_masked(df, tr.feature_names, tr.manifest, pw, seed=seed)
         for split in splits:
             data = load_split(cfg, split, df=df, ablation=mcfg.ablation)
             for dropped in conditions:
@@ -81,9 +83,12 @@ def run(cfg: CohortConfig | None = None, mcfg: MARLConfig | None = None,
                     je, df, split, tr.feature_names, drop_cols)).auprc
                 ap_g = M.discrimination(
                     data.y, _gru_predict_drop(gm, df, split, tr.feature_names, drop_cols)).auprc
+                ap_gm = M.discrimination(
+                    data.y, _gru_predict_drop(gmm, df, split, tr.feature_names, drop_cols)).auprc
                 res.setdefault(("SENTINEL-Ensemble", split, dropped), []).append(ap_e)
                 res.setdefault(("JointEnsemble-6", split, dropped), []).append(ap_j)
                 res.setdefault(("GRU-single", split, dropped), []).append(ap_g)
+                res.setdefault(("GRU-masked", split, dropped), []).append(ap_gm)
         log.info("  seed %d done", seed)
 
     _write_report(cfg, res, splits, conditions, seeds)
@@ -100,7 +105,10 @@ def _write_report(cfg, res, splits, conditions, seeds):
          f"_Test-time organ blinding (inputs zeroed); mean AUPRC over {len(seeds)} seed(s). "
          "Δ = AUPRC drop from full inputs. Graceful = small Δ. **JointEnsemble-6** is the "
          "control (6 GRUs on the joint vector + max-combine, no organ split): if it degrades "
-         "like GRU-single, the robustness comes from DECOMPOSITION, not ensembling._\n"]
+         "like GRU-single, the robustness comes from DECOMPOSITION, not ensembling. "
+         "**GRU-masked** is the second control — the monolithic GRU trained WITH organ-block "
+         "dropout augmentation (mask_prob=0.5): if it stays fragile under blinding, robustness "
+         "is structural, not merely a matter of training the monolith on missingness._\n"]
     for split in splits:
         L.append(f"\n## Split: {split}\n")
         L.append("| Dropped organ | " + " | ".join(f"{m} | Δ" for m in models) + " |")

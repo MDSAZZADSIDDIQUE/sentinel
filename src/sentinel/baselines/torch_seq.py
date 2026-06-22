@@ -67,12 +67,31 @@ def _collate(batch):
     return X, Y, M, lengths
 
 
+def _mask_groups_(X: torch.Tensor, groups, mask_prob: float) -> torch.Tensor:
+    """Augmentation: with prob `mask_prob`, zero ONE random feature group per
+    episode (in place), mimicking the test-time organ-blinding stress. Used to
+    give the monolithic GRU a missingness-aware training signal, so that any
+    residual robustness gap can be attributed to organ DECOMPOSITION rather than
+    merely to whether the model saw input dropouts during training. `groups` is a
+    list of LongTensor column-index sets (one per organ). No-op when disabled."""
+    if not groups or mask_prob <= 0.0:
+        return X
+    drop = torch.rand(X.shape[0], device=X.device) < mask_prob
+    for bi in torch.nonzero(drop, as_tuple=True)[0].tolist():
+        g = int(torch.randint(0, len(groups), (1,)).item())
+        X[bi, :, groups[g]] = 0.0
+    return X
+
+
 def train_seq(model: nn.Module, train_ds, val_ds, pos_weight: float,
               epochs: int = 25, batch_size: int = 64, lr: float = 1e-3,
-              patience: int = 5, seed: int = 0) -> nn.Module:
+              patience: int = 5, seed: int = 0,
+              mask_groups: list | None = None, mask_prob: float = 0.0) -> nn.Module:
     torch.manual_seed(seed)
     dev = device()
     model = model.to(dev)
+    groups = ([torch.as_tensor(g, dtype=torch.long, device=dev) for g in mask_groups]
+              if mask_groups else None)
     opt = torch.optim.Adam(model.parameters(), lr=lr)
     pw = torch.tensor([pos_weight], device=dev)
     loss_fn = nn.BCEWithLogitsLoss(pos_weight=pw, reduction="none")
@@ -83,6 +102,7 @@ def train_seq(model: nn.Module, train_ds, val_ds, pos_weight: float,
         model.train()
         for X, Y, Msk, _ in tl:
             X, Y, Msk = X.to(dev), Y.to(dev), Msk.to(dev)
+            X = _mask_groups_(X, groups, mask_prob)
             opt.zero_grad()
             logits = model(X)
             loss = (loss_fn(logits, Y) * Msk).sum() / Msk.sum()

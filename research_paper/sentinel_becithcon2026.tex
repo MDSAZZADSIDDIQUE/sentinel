@@ -34,11 +34,12 @@ privacy without sacrificing discrimination. On a MIMIC-IV cohort of 80,248 ICU
 stays, the organ-decomposed model matches or beats a monolithic deep model on the
 area under the precision--recall curve (AUPRC 0.257 vs.\ 0.205 on the internal
 test set), and is markedly more robust to a missing organ signal: blinding any one
-organ at test time costs the decomposed model a mean of 0.001 AUPRC versus 0.03--0.05
+organ at test time costs the decomposed model a mean of 0.002 AUPRC versus 0.03--0.04
 for the monolithic model. A controlled experiment---a six-member ensemble on the
 joint feature vector with the identical max-combine rule---degrades exactly like the
-monolithic model, establishing that the robustness comes from \emph{organ
-decomposition}, not ensembling. The decomposition is interpretable (per-organ risk
+monolithic model, and a monolith trained \emph{with} the same missing-input
+augmentation narrows but does not close the gap, establishing that the robustness
+comes from \emph{organ decomposition}, not ensembling or missingness-aware training. The decomposition is interpretable (per-organ risk
 attribution) and trainable across non-IID care-unit ``sites'' via federated
 averaging at a quantified utility cost. In contrast, we find---and report
 plainly---that adding cooperative multi-agent reinforcement learning yields no
@@ -46,7 +47,12 @@ benefit: a centralized critic (MAPPO) is statistically indistinguishable from
 independent learners (IPPO), and a utility-trained policy is a far weaker
 discriminator than supervision. We argue this null is principled: because alerting
 does not perturb the patient, the observation trajectory is exogenous and the
-cooperative coupling that motivates a centralized critic is absent. All numbers are
+cooperative coupling that motivates a centralized critic is absent. We externally
+validate on a second database (eICU; 122{,}798 stays across 208 hospitals): with the
+MIMIC-trained models \emph{frozen}, discrimination transfers (AUROC retained), the
+missing-signal robustness gap attenuates while the decomposed model stays the most
+robust, and---most notably---the federated privacy cost replicates across genuine
+institutions ($-0.089$ AUPRC, versus $-0.091$ for simulated care units). All numbers are
 reported with bootstrap confidence intervals on internal and external splits; the
 pipeline and analysis are fully reproducible.
 \end{abstract}
@@ -83,13 +89,18 @@ Our contributions, each tied to a controlled result:
   \item \textbf{Decomposition matches/beats a monolithic deep model} on AUPRC, with
         bootstrap confidence intervals, on internal and external splits.
   \item \textbf{Decomposition---not ensembling---confers missing-signal robustness},
-        established by a joint-feature ensemble control.
-  \item \textbf{Interpretability} via per-organ risk attribution, demonstrated in a
+        established by two controls: a joint-feature ensemble and a monolith trained
+        with organ-dropout augmentation, both markedly less robust than decomposition.
+  \item \textbf{Interpretability} via per-organ risk attribution, supported by a
         replay dashboard.
   \item \textbf{Federated feasibility at a quantified privacy cost} across non-IID
         care units.
   \item \textbf{A principled null for cooperative coordination}: MAPPO $\approx$ IPPO,
         explained by the exogenous-dynamics structure of alerting.
+  \item \textbf{External validation on a second database and real institutions}: on
+        eICU, discrimination transfers and the federated privacy cost replicates across
+        genuine hospitals---with an honest account of where the robustness advantage
+        attenuates under domain shift.
 \end{itemize}
 We report every result that weakened a claim rather than hiding it.
 
@@ -104,7 +115,8 @@ motivated by agents perturbing a shared environment; IPPO \cite{dewitt2020ippo} 
 the natural control isolating the value of a centralized critic. Federated averaging
 \cite{mcmahan2017fedavg} enables training without pooling data, but non-IID clients
 degrade utility \cite{zhao2018noniid}. Fairness and shortcut concerns in clinical ML
-are well documented \cite{obermeyer2019bias}. We bring these threads together with
+are well documented \cite{obermeyer2019bias}; we audit the latter (shortcut
+reliance) directly in our ablation. We bring these threads together with
 an emphasis on \emph{controlled} attribution of where decomposition helps.
 
 \section{Methods}
@@ -119,7 +131,10 @@ measured against the patient's pre-suspicion admission SOFA---giving a prevalenc
 37.4\% and, crucially, a clean \emph{three-way split}: positives are stays with
 onset at least $H{=}6$\,h into the stay (8{,}763); stays that are septic earlier or
 present-on-admission are \emph{excluded} from both classes; controls never meet
-Sepsis-3. Derivations are validated by unit tests against hand-checked stays.
+Sepsis-3. These are distinct denominators: 37.4\% of stays are ever-septic, the
+8{,}763 actionable-onset positives are $\approx$11\% of stays, and $\approx$5\% of
+patient-\emph{hours} are positive (the AUPRC no-skill line). Derivations are validated
+by unit tests against hand-checked stays.
 
 \subsection{Features and the exogenous-dynamics formulation}
 Per organ we form hourly features (values, missingness masks, and measurement
@@ -155,15 +170,30 @@ metric is AUPRC (class imbalance $\approx$5\% positive hours) with 95\% bootstra
 confidence intervals resampled over \emph{stays}; we also report AUROC, the alert
 lead time, and the alarm burden as distinct \emph{alarm events} per patient-day
 (rising edge with a refractory window), with the operating threshold chosen on
-validation at a fixed budget. Learned models use 3--5 seeds. Compute is a single
+validation at a fixed budget. Learned models use 3--5 seeds (robustness and the organ-decomposed
+external rows use 3, other runs up to 5; full-input baselines thus differ by
+$\leq$0.01 AUPRC across analyses, so robustness is reported as within-run deltas).
+Compute is a single
 4\,GB GPU; all training is FP32.
+
+\textbf{External validation.} As a second, independent test we score the
+\emph{frozen} MIMIC-trained models on eICU-CRDB v2.0 \cite{pollard2018eicu}, a
+multi-center U.S.\ database, harmonized into the identical organ-feature schema and
+normalized with the MIMIC training statistics---no gradient ever updates on eICU
+(asserted by a unit test). We replicate the Sepsis-3 label and episode logic; because
+eICU culture coverage is sparse, suspicion of infection is antibiotic-primary, which
+we treat as a documented label-fidelity deviation. The external cohort is 122{,}798
+modeling stays across 208 hospitals (no-skill AUPRC 0.036), and for federation we use
+genuine hospital identifiers as sites.
 
 \section{Results}
 \subsection{Discrimination}
 Table~\ref{tab:disc} and Fig.~\ref{fig:disc} show the organ-decomposed model
-matching or beating the monolithic GRU---AUPRC 0.257 vs.\ 0.205 on internal test
-(confidence intervals barely overlap), comparable externally---and roughly doubling
-XGBoost. The utility-trained MAPPO/IPPO policies are weak discriminators
+matching or beating the monolithic GRU---AUPRC 0.257 vs.\ 0.205 on internal test,
+where the 95\% CIs are disjoint (0.233--0.283 vs.\ 0.186--0.225), and roughly doubling
+XGBoost internally (0.257 vs.\ 0.115). On the held-out CVICU unit the monolith is
+marginally ahead (0.283 vs.\ 0.265), with the decomposed model regaining the lead on
+eICU AUPRC (Sec.~\ref{subsec:external}). The utility-trained MAPPO/IPPO policies are weak discriminators
 ($\sim$0.06), as expected when optimizing alarm utility rather than the label.
 
 \begin{table}[t]
@@ -191,21 +221,65 @@ SENTINEL-MAPPO $\approx$ IPPO & 0.063 & 0.051 \\
 \label{fig:disc}
 \end{figure}
 
+\subsection{Lead time and alarm burden}
+At the validation-chosen operating point (alarm budget $\leq$8 events/patient-day),
+the models reach comparable detection at a similar burden (Table~\ref{tab:clin}). The
+decomposed model detects 98\% of positive episodes at a median lead time of 13.7\,h
+and 1.5 distinct alarm events per patient-day---matching the monolith on burden and
+sensitivity, with a slightly \emph{shorter} lead time and marginally higher control
+false-alarm rate. We report this plainly: the decomposition's contribution is
+robustness and interpretability, not earlier or quieter alerting, on which it is on
+par with the monolithic baseline (the pattern holds on the held-out CVICU unit,
+lead 6.0\,h vs.\ 8.0\,h).
+
+\begin{table}[t]
+\caption{Clinical metrics at the validation-set operating point (internal test;
+alarm budget $\leq$8/patient-day; 3 seeds). Lead = median hours before onset over
+detected positives; FA = fraction of control stays raising $\geq$1 alarm.}
+\label{tab:clin}
+\centering\small
+\begin{tabular}{lcccc}
+\toprule
+Model & Sens. & Lead (h) & Alarms/day & FA \\
+\midrule
+NEWS2 & 0.96 & 18.0 & 2.6 & 0.93 \\
+XGBoost & 0.97 & 16.0 & 1.8 & 0.78 \\
+GRU-single (monolithic) & 0.97 & 15.3 & 1.5 & 0.79 \\
+\textbf{SENTINEL (organ-decomposed)} & 0.98 & 13.7 & 1.5 & 0.81 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \subsection{Missing-signal robustness, controlled}
 Fig.~\ref{fig:rob} is the central result. Blinding any one organ's inputs at test
-time costs the decomposed model a mean of $-0.001$/$-0.002$ AUPRC (test/external),
-versus $-0.028$/$-0.041$ for the monolithic GRU. The control---\textsc{JointEnsemble-6},
-six GRUs on the \emph{joint} vector with the same max-combine---degrades like the
-monolithic model ($-0.030$/$-0.056$), and at full inputs is no stronger than it
-(0.202 vs.\ 0.199). Thus the robustness, and the discrimination gain, come from
-\emph{organ decomposition}, not from ensembling. The starkest case: with the
-cardiovascular organ blinded on the external unit, the decomposed model holds 0.273
-while both the joint ensemble (0.173) and the monolithic model (0.176) collapse.
+time costs the decomposed model a mean of $-0.002$/$-0.005$ AUPRC (internal test /
+held-out CVICU), versus $-0.028$/$-0.041$ for the monolithic GRU. Two controls
+localize the cause. First, \textsc{JointEnsemble-6}---six GRUs on the \emph{joint}
+vector with the same max-combine---degrades like the monolith ($-0.030$/$-0.056$) and
+at full inputs is no stronger than it (both $\approx$0.20, well below the decomposed
+0.257): neither the robustness nor the discrimination gain comes from ensembling.
+Second, to rule out the simpler reading that the monolith is fragile only because it
+never saw missing inputs during training, we train \textsc{GRU-masked}---the same
+monolithic GRU with organ-block dropout augmentation (one random organ zeroed per
+episode, exactly the test-time perturbation). This more than halves its degradation
+($-0.011$/$-0.015$) but leaves the decomposition $3$--$5\times$ more robust:
+missingness-aware training of a single network narrows the gap without closing it, so
+the robustness is a structural property of \emph{organ decomposition}, not of
+ensembling or of having trained on dropouts. The starkest case: with the
+cardiovascular organ blinded on CVICU, the decomposed model is unmoved (0.289, above
+its own full-input mean---no single organ is load-bearing) while the joint ensemble
+(0.173) and plain monolith (0.176) collapse; augmentation rescues the monolith here
+(0.268) but not on every organ. The decomposition is itself not uniformly
+flat---its worst case, the respiratory organ, costs $-0.043$ on CVICU (comparable to
+the monolith's mean, and matched by \textsc{GRU-masked} at $-0.034$)---but no organ is
+catastrophic and its across-organ mean stays near zero.
 
 \begin{figure}[t]
 \centering\includegraphics[width=\columnwidth]{fig_robustness.pdf}
-\caption{External AUPRC as each organ is blinded. Only organ-decomposition (red)
-degrades gracefully; the ensembling control collapses with the monolithic model.}
+\caption{Held-out CVICU AUPRC as each organ is blinded. Organ-decomposition (red) stays
+flat; the joint-feature ensemble and the monolithic GRU collapse, and even a monolith
+trained with organ-dropout augmentation (\textsc{GRU-masked}, orange) degrades more than
+the decomposition.}
 \label{fig:rob}
 \end{figure}
 
@@ -213,8 +287,10 @@ degrades gracefully; the ensembling control collapses with the monolithic model.
 Fig.~\ref{fig:abl} decomposes the gap between physiology-only and full inputs. With
 tight confidence intervals on the full cohort, dropping the measurement/ordering
 channels costs essentially nothing ($-0.002$, not significant), while dropping the
-temporal prior costs the rest ($-0.07$ to $-0.08$). The non-physiology signal here is
-a benign timing prior, \emph{not} the clinician-ordering shortcut that has undermined
+temporal prior costs the rest (the deep model $-0.07$, XGBoost $-0.02$). The
+non-physiology signal here is a benign timing prior---base-rate hazard over stay-time,
+which the leakage test and length-matched control episodes keep from encoding onset
+directly---\emph{not} the clinician-ordering shortcut that has undermined
 deployed models \cite{wong2021epic}.
 
 \begin{figure}[t]
@@ -234,31 +310,103 @@ nothing to coordinate. An action-history-conditioned actor variant matched the
 observation-only policy, empirically justifying the simplification.
 
 \subsection{Federated privacy cost}
-Across eight non-IID care units, FedAvg reaches AUPRC 0.121 (test) / 0.237 (external)
-versus 0.212 / 0.290 centralized---a real cost of $-0.091$ / $-0.052$, yet still well
+Across eight non-IID care units, FedAvg reaches AUPRC 0.121 (test) / 0.237 (held-out
+CVICU) versus 0.212 / 0.290 centralized---a real cost of $-0.091$ / $-0.053$, yet still well
 above no-skill. Privacy-preserving training is feasible but not free when sites are
 strongly non-IID \cite{zhao2018noniid}.
+
+\subsection{External validation: a second database and real institutions}
+\label{subsec:external}
+Table~\ref{tab:eicu} reports the frozen models on eICU. \emph{Discrimination
+transfers}: the supervised deep models retain 88--91\% of their internal AUROC
+(XGBoost 97\%). The organ-decomposed model keeps the best external AUPRC (0.123), but
+on the prevalence-independent AUROC it is the weakest of the four supervised models
+(0.658 vs.\ 0.677--0.702 for XGBoost, the monolith, and the joint ensemble)---its
+external edge is AUPRC-specific, and we report plainly that AUROC, the cleaner
+cross-database metric, does not favour the decomposition. AUPRC falls in
+absolute terms, but this tracks the lower eICU prevalence (no-skill 0.036 vs.\ 0.049
+internally), not a ranking collapse---so we read cross-database transfer off AUROC.
+NEWS2 and the utility-trained policy stay weak, as internally; the policy in fact
+transfers slightly \emph{better} to 208 real hospitals (AUROC 0.561) than to the single
+simulated CVICU unit (0.435), a reminder that one held-out care unit is a noisier
+external proxy than a genuine multi-center test.
+
+\begin{table}[t]
+\caption{External validation on eICU (122{,}798 stays, 208 hospitals; no-skill AUPRC
+0.036). Frozen MIMIC-trained models---no eICU gradient updates. AUROC is the
+prevalence-independent cross-database metric.}
+\label{tab:eicu}
+\centering\small
+\begin{tabular}{lccc}
+\toprule
+Model & int.\ AUROC & eICU AUROC & eICU AUPRC \\
+\midrule
+NEWS2 & 0.588 & 0.559 & 0.044 \\
+XGBoost & 0.701 & 0.677 & 0.076 \\
+GRU-single (monolithic) & 0.756 & 0.687 & 0.092 \\
+JointEnsemble-6 (control) & 0.769 & 0.702 & 0.092 \\
+\textbf{SENTINEL (organ-decomposed)}$^{\dagger}$ & 0.751 & 0.658 & \textbf{0.123} \\
+SENTINEL-MAPPO $\approx$ IPPO & 0.609 & 0.561 & 0.045 \\
+\bottomrule
+\end{tabular}
+
+{\footnotesize $^{\dagger}$External figures from the robustness full-input condition
+(3 seeds); the 5-seed external run behind the other rows predates this model variant.}
+\end{table}
+
+\emph{The robustness gap attenuates under domain shift.} Re-running the per-organ
+blinding on eICU, the organ-decomposed model remains the most robust (mean $-0.003$
+AUPRC) but the controls degrade far less than internally (JointEnsemble-6 $-0.006$,
+monolith $-0.007$, versus $-0.030$/$-0.028$ on MIMIC). The cause is mechanical:
+externally the controls already sit near the signal floor (full-input AUPRC $\approx$
+no-skill), leaving little for blinding to remove. The advantage does persist where
+there is signal to lose---on the high-signal respiratory and cardiovascular organs the
+decomposed model is flat ($-0.001$) while the controls drop $-0.012$/$-0.014$---but we
+do not claim the full internal gap transfers.
+
+\emph{The federated privacy cost replicates on real institutions.} Using genuine
+hospital identifiers as sites---78 hospitals with sufficient sepsis-positive volume,
+plus 15 held out entirely as unseen institutions---FedAvg costs $-0.089$ AUPRC versus
+centralized ($0.197\!\to\!0.108$), almost identical to the $-0.091$ measured over
+simulated care units above. The cost is thus a property of non-IID clinical
+federation, not an artifact of the care-unit proxy. The centralized model generalizes
+to the 15 unseen hospitals exactly as well as in-distribution (0.197 on both), and
+federation's cost there is slightly smaller ($-0.075$). One heterogeneity has no
+care-unit analog: 38 hospitals with $\geq$200 stays report zero sepsis (incomplete
+medication/culture reporting) and must be excluded from the federation.
 
 \section{Discussion}
 The decomposition buys exactly what a monolithic model cannot: per-organ
 attribution and a structural fallback when a signal is missing, at no discrimination
 cost---indeed a gain. The cooperative-MARL machinery, by contrast, adds nothing here,
 and we believe the exogenous-dynamics analysis explains why and generalizes to other
-\emph{alerting} (as opposed to \emph{acting}) clinical tasks. The honest takeaway is
-that \emph{structure}, not \emph{coordination}, is the useful inductive bias.
+\emph{alerting} (as opposed to \emph{acting}) clinical tasks. External validation
+sharpens the picture: discrimination and the federated privacy cost both transfer to
+real institutions, whereas the robustness advantage---though it keeps the decomposed
+model on top---shrinks once the baselines lose their signal to domain shift, an effect
+only a genuine second database could expose. The honest takeaway is that
+\emph{structure}, not \emph{coordination}, is the useful inductive bias.
 
 \section{Limitations}
-Single-source data (MIMIC-IV); ``sites'' are simulated by care unit, not real
-institutions; labels are retrospective and the escalation action is a proxy for real
-clinical response. The internal test set has a few hundred positive episodes, so we
-lean on the external split and CIs. The federated study uses a single shared model;
-federating the organ heads is future work.
+External validation on eICU and federation across real hospitals address the
+single-source and simulated-site limitations of an earlier draft, but limitations
+remain. eICU label fidelity is imperfect: culture coverage is sparse, so suspicion of
+infection is antibiotic-primary, and apparent Sepsis-3 prevalence is lower than in
+MIMIC (3.6\% vs.\ 4.9\% positive hours); we therefore lead external comparisons with
+AUROC and report AUPRC against the matched no-skill line. The missing-signal
+robustness advantage, large internally, attenuates under domain shift. Labels are
+retrospective and the escalation action is a proxy for real clinical response; the
+internal test set has a few hundred positive episodes, so we lean on external splits
+and CIs. The federated study uses a single shared model; federating the organ heads is
+future work.
 
 \section{Reproducibility and Ethics}
 The pipeline is config-driven with fixed seeds; cohort, labels, features, training,
 evaluation, and figures regenerate end-to-end, and unit tests cover the Sepsis-3
-derivation, the reward, leakage, and the MARL gates. MIMIC-IV is credentialed under a
-PhysioNet data-use agreement; no raw or derived row-level data is shared.
+derivation, the reward, leakage, the MARL gates, and---for the external study---the
+eICU harmonization and the frozen-model invariant (no gradient updates on external
+data). MIMIC-IV and eICU are both credentialed under PhysioNet data-use agreements; no
+raw or derived row-level data is shared.
 
 \section{Conclusion}
 Organ-system decomposition gives an ICU early-warning model that matches or beats a

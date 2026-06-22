@@ -13,19 +13,21 @@
   },
   "robustness_mean_delta": {
     "_cols": "model -> {split -> mean AUPRC drop when one organ is blinded}",
-    "SENTINEL (organ)":  {"test": -0.001, "external": -0.002},
+    "_note": "Single self-consistent 4-model run (3 seeds, full cohort; outputs/reports/robustness_full.md). GRU-masked = monolithic GRU trained WITH organ-block dropout augmentation (mask_prob=0.5) = missingness-aware control: augmentation halves the monolith's degradation but does not close the gap to the decomposition.",
+    "SENTINEL (organ)":  {"test": -0.002, "external": -0.005},
     "JointEnsemble-6":   {"test": -0.030, "external": -0.056},
-    "GRU-single":        {"test": -0.028, "external": -0.041}
+    "GRU-single":        {"test": -0.028, "external": -0.041},
+    "GRU-masked":        {"test": -0.011, "external": -0.015}
   },
   "robustness_per_organ_external": {
-    "_cols": "organ -> {model -> AUPRC with that organ blinded}; baseline (none) included",
-    "none":           {"SENTINEL (organ)": 0.258, "JointEnsemble-6": 0.283, "GRU-single": 0.271},
-    "respiratory":    {"SENTINEL (organ)": 0.228, "JointEnsemble-6": 0.179, "GRU-single": 0.208},
-    "cardiovascular": {"SENTINEL (organ)": 0.273, "JointEnsemble-6": 0.173, "GRU-single": 0.176},
-    "neurologic":     {"SENTINEL (organ)": 0.259, "JointEnsemble-6": 0.213, "GRU-single": 0.225},
-    "renal":          {"SENTINEL (organ)": 0.256, "JointEnsemble-6": 0.243, "GRU-single": 0.244},
-    "coagulation":    {"SENTINEL (organ)": 0.259, "JointEnsemble-6": 0.271, "GRU-single": 0.256},
-    "hepatic":        {"SENTINEL (organ)": 0.261, "JointEnsemble-6": 0.283, "GRU-single": 0.271}
+    "_cols": "organ -> {model -> AUPRC with that organ blinded}; baseline (none) included. Same 4-model run as robustness_mean_delta.",
+    "none":           {"SENTINEL (organ)": 0.274, "JointEnsemble-6": 0.283, "GRU-single": 0.271, "GRU-masked": 0.276},
+    "respiratory":    {"SENTINEL (organ)": 0.231, "JointEnsemble-6": 0.179, "GRU-single": 0.208, "GRU-masked": 0.242},
+    "cardiovascular": {"SENTINEL (organ)": 0.289, "JointEnsemble-6": 0.173, "GRU-single": 0.176, "GRU-masked": 0.268},
+    "neurologic":     {"SENTINEL (organ)": 0.275, "JointEnsemble-6": 0.213, "GRU-single": 0.225, "GRU-masked": 0.247},
+    "renal":          {"SENTINEL (organ)": 0.271, "JointEnsemble-6": 0.243, "GRU-single": 0.244, "GRU-masked": 0.264},
+    "coagulation":    {"SENTINEL (organ)": 0.274, "JointEnsemble-6": 0.271, "GRU-single": 0.256, "GRU-masked": 0.270},
+    "hepatic":        {"SENTINEL (organ)": 0.277, "JointEnsemble-6": 0.283, "GRU-single": 0.271, "GRU-masked": 0.278}
   },
   "ablation_test_auprc": {
     "_cols": "model -> {full, no_measurement (drop measurement, keep timing), physiology (drop both)}",
@@ -41,5 +43,33 @@
     "_note": "FedAvg over 8 non-IID care-unit sites (15 rounds) vs centralized. Honest cost, not free.",
     "Centralized": {"test": 0.212, "external": 0.290},
     "Federated":   {"test": 0.121, "external": 0.237}
+  },
+  "clinical_test": {
+    "_note": "Clinical metrics at the val-chosen operating point (alarm budget <=8 events/patient-day; 3 seeds; internal test). Source: outputs/reports/baselines_full.md. SENTINEL(organ)=OrganEnsemble-indep.",
+    "_cols": "model -> {sens, median_lead_h, alarm_events_per_day, fa_rate}",
+    "NEWS2":            {"sens": 0.96, "lead_h": 18.0, "events_day": 2.6, "fa": 0.93},
+    "XGBoost":          {"sens": 0.97, "lead_h": 16.0, "events_day": 1.8, "fa": 0.78},
+    "GRU-single":       {"sens": 0.97, "lead_h": 15.3, "events_day": 1.5, "fa": 0.79},
+    "SENTINEL (organ)": {"sens": 0.98, "lead_h": 13.7, "events_day": 1.5, "fa": 0.81}
+  },
+  "clinical_external_cvicu_lead_h": {
+    "_note": "Median lead time (h) on the held-out CVICU unit, same operating point.",
+    "GRU-single": 8.0, "SENTINEL (organ)": 6.0
+  },
+  "eicu_external": {
+    "_note": "Frozen MIMIC models scored on eICU (122,798 stays, 208 hospitals; no-skill AUPRC 0.036); no eICU gradient updates. AUROC is the prevalence-independent cross-db metric. Rows are 5-seed (outputs/reports/eicu_external.md) EXCEPT 'SENTINEL (organ)', whose eICU figures are the 3-seed robustness full-input run (outputs/reports/eicu_robustness.md; dagger in paper) and whose int_auroc is the 3-seed baselines OrganEnsemble.",
+    "no_skill": 0.036,
+    "_cols": "model -> {int_auroc, eicu_auroc, eicu_auprc}",
+    "NEWS2":            {"int_auroc": 0.588, "eicu_auroc": 0.559, "eicu_auprc": 0.044},
+    "XGBoost":          {"int_auroc": 0.701, "eicu_auroc": 0.677, "eicu_auprc": 0.076},
+    "GRU-single":       {"int_auroc": 0.756, "eicu_auroc": 0.687, "eicu_auprc": 0.092},
+    "JointEnsemble-6":  {"int_auroc": 0.769, "eicu_auroc": 0.702, "eicu_auprc": 0.092},
+    "SENTINEL (organ)": {"int_auroc": 0.751, "eicu_auroc": 0.658, "eicu_auprc": 0.123},
+    "SENTINEL-MAPPO":   {"int_auroc": 0.609, "eicu_auroc": 0.561, "eicu_auprc": 0.045}
+  },
+  "federated_eicu": {
+    "_note": "FedAvg over genuine eICU hospital IDs (15 rounds) vs centralized; 78 federation hospitals + 15 held-out unseen; 38 zero-positive hospitals excluded. Source: outputs/reports/eicu_federated.md.",
+    "in_distribution_78hosp": {"no_skill": 0.051, "Centralized": 0.197, "Federated": 0.108, "cost": -0.089},
+    "unseen_15hosp":          {"no_skill": 0.059, "Centralized": 0.197, "Federated": 0.122, "cost": -0.075}
   }
 }
