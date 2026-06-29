@@ -61,3 +61,5 @@ research_paper/**/*.synctex.gz
 research_paper/**/*.fls
 research_paper/**/*.fdb_latexmk
 research_paper/**/*.log
+# compiled paper (regenerable from .tex); figures/*.pdf are still tracked
+research_paper/*.pdf
