@@ -16,7 +16,7 @@ centralizing raw patient data** (federated across simulated sites).
 > Action space is **alerting/escalation, not treatment dosing** — by design.
 
 This is a reproducible research artifact targeting IEEE BECITHCON 2026. See
-`PLAN.md` for the phased build and `CLAUDE.md` for conventions/decisions.
+`PLAN.md` for the phased build.
 
 ## Status
 Phase 0 (scaffold) complete; Phase 1 (data → cohort → labels) in progress. Build
@@ -70,8 +70,7 @@ row-level patient data, and any PHI are **never** committed — `.gitignore`
 excludes `mimic-iv-3.1/`, `data/`, `outputs/`, and all `*.parquet`/`*.csv(.gz)`.
 **Note:** this repo sits under a OneDrive-synced path; pause/exclude OneDrive
 sync for the data folders or redirect them via `SENTINEL_DATA_ROOT` /
-`SENTINEL_OUTPUT_ROOT` to avoid syncing credentialed data to the cloud. See
-`CLAUDE.md`.
+`SENTINEL_OUTPUT_ROOT` to avoid syncing credentialed data to the cloud.
 
 ## Layout
 `src/sentinel/{data,labels,features,env,agents,baselines,safety,fairness,federated,eval,viz}`,

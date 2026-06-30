@@ -3,7 +3,7 @@
 All paths derive from the repository root, which is located relative to this
 file (``src/sentinel/paths.py`` -> repo root is ``parents[2]``). Data and output
 roots can be redirected via environment variables so heavy artifacts can live
-*outside* the OneDrive-synced tree if desired (see CLAUDE.md, governance note):
+*outside* the OneDrive-synced tree if desired:
 
     SENTINEL_DATA_ROOT     -> processed parquet + derived tables  (default: ./data)
     SENTINEL_OUTPUT_ROOT   -> figures, reports, checkpoints, logs  (default: ./outputs)

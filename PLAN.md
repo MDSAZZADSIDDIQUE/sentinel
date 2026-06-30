@@ -9,7 +9,7 @@ Status legend: ✅ done · 🟡 in progress · ⬜ not started · ⏸ awaiting r
 - [x] Package tree `src/sentinel/...`, `pyproject.toml` (pinned), `.gitignore` (data governance)
 - [x] Core utils: `paths.py`, `duck.py` (8GB/6thr/spill), `config.py` (YAML), `logging_utils.py` (stage RAM/VRAM/wall-clock)
 - [x] Typer CLI `sentinel`, `run.ps1`/`run.bat`, `Makefile`
-- [x] `CLAUDE.md`, `PLAN.md`, `README.md`
+- [x] `PLAN.md`, `README.md`
 - [x] Verify data path + DuckDB row counts (no in-RAM load) → `outputs/logs/verify_data.log`
 
 ## Phase 1 — Data → cohort → labels ✅ ⏸ CHECKPOINT REACHED (awaiting review)

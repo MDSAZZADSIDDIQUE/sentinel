@@ -1,6 +1,6 @@
 """Methodology experiment: does conditioning the actor on its own alert history
 help? If action-conditioned ≈ observation-only on dev, the fixed-trajectory
-one-forward-pass simplification is empirically justified (CLAUDE.md framing).
+one-forward-pass simplification is empirically justified.
 
 Trains both variants (MAPPO) on dev across seeds and compares test AUPRC.
 Run on CPU to avoid contending with the GPU adjudication.
