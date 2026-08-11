@@ -28,35 +28,30 @@ email}
 \begin{abstract}
 Early warning of ICU sepsis improves outcomes, yet the strongest deep models are
 opaque, brittle when inputs go missing, and require centralizing sensitive
-records---one widely deployed proprietary model was recently shown to fail on
-external validation by latching onto clinician ordering behavior rather than
-physiology \cite{wong2021epic}. We decompose the patient into six organ-system
-agents aligned with the Sequential Organ Failure Assessment (SOFA) score, each
-seeing only its own subsystem, and combine their organ-specific onset risks; the
-action is alerting (maintain / watch / escalate), never treatment dosing. On a
-MIMIC-IV cohort of 80{,}248 ICU stays, the organ-decomposed model flags
-deterioration a median 13.7\,h before onset---detecting 98\% of septic episodes at
-$\approx$1.5 alarm events per patient-day---and matches or beats a monolithic deep
-model on the area under the precision--recall curve (AUPRC 0.257 vs.\ 0.205 on the
-internal test set, disjoint 95\% CIs), roughly doubling XGBoost. Crucially, it is
-far more robust to a missing organ signal: blinding any one organ at test time
-costs it a mean of 0.002--0.005 AUPRC versus 0.03--0.04 for the monolith, and two
-controls---a six-member ensemble on the joint feature vector and a monolith trained
-\emph{with} the same missing-input augmentation---localize this robustness to
-\emph{organ decomposition}, not ensembling or missingness-aware training. The
-decomposition also yields per-organ risk attribution---which system is
-deteriorating---and trains across non-IID care-unit ``sites'' by federated
-averaging at a quantified privacy cost. With the MIMIC-trained models \emph{frozen},
-we externally validate on a second database (eICU; 122{,}798 stays across 208
-hospitals): discrimination transfers (AUROC retained) and the federated privacy
-cost replicates across genuine institutions ($-0.089$ vs.\ $-0.091$ AUPRC for
-simulated care units), while the missing-signal advantage attenuates but stays in
-the decomposed model's favor. We also report a principled null plainly---adding
-cooperative multi-agent reinforcement learning yields no benefit (a centralized
-MAPPO critic $\approx$ independent IPPO learners), as expected when alerting does
-not perturb the patient and the observation trajectory is exogenous. All numbers
-carry bootstrap confidence intervals on internal and external splits, and the
-pipeline and analysis are fully reproducible.
+records---a deployed proprietary model failed externally by latching onto clinician
+ordering rather than physiology \cite{wong2021epic}. We decompose the patient into
+six organ-system agents aligned with the Sequential Organ Failure Assessment (SOFA)
+score, each seeing only its own subsystem, and combine their organ-specific onset
+risks; the action is alerting, never treatment dosing. On a MIMIC-IV cohort of
+80{,}248 ICU stays, the organ-decomposed model flags deterioration a median
+13.7\,h before onset---detecting 98\% of septic episodes at $\approx$1.5 alarm
+events per patient-day---and matches or beats a monolithic deep model on AUPRC
+(0.257 vs.\ 0.205 on internal test, disjoint 95\% CIs), roughly doubling XGBoost.
+Crucially, it is far more robust to a missing organ signal: blinding any one organ
+costs it 0.002--0.005 AUPRC versus 0.03--0.04 for the monolith, and two
+controls---a joint-feature ensemble and a missingness-augmented monolith---localize
+this robustness to \emph{organ decomposition} itself, not ensembling or
+missingness-aware training. The decomposition also yields per-organ risk
+attribution---which system is deteriorating---and trains by federated averaging
+across non-IID care units at a quantified privacy cost. With the MIMIC-trained
+models \emph{frozen}, we externally validate on a second database (eICU; 122{,}798
+stays, 208 hospitals): discrimination transfers (AUROC retained) and the federated
+privacy cost replicates across genuine institutions ($-0.089$ vs.\ $-0.091$ AUPRC),
+while the missing-signal advantage attenuates but stays in the decomposed model's
+favor. We also report a principled null: cooperative multi-agent RL adds no benefit
+(centralized MAPPO $\approx$ independent IPPO), as expected when alerting does not
+perturb the patient. All numbers carry bootstrap CIs, and the pipeline is fully
+reproducible.
 \end{abstract}
 
 \begin{IEEEkeywords}
