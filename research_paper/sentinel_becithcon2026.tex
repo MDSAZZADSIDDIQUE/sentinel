@@ -9,6 +9,22 @@
 \usepackage{booktabs}
 \usepackage{url}
 \graphicspath{{figures/}}
+\usepackage{fancyhdr}
+
+% --- BECITHCON 2026 camera-ready furniture -------------------------------
+% Conference header (first page, top-left) + IEEE copyright notice (first
+% page, bottom-left). Both sit in zero-height boxes so they occupy the
+% margins and do not shift the IEEE text block. No page numbers anywhere.
+\fancypagestyle{becithconfirst}{%
+  \fancyhf{}%
+  \renewcommand{\headrulewidth}{0pt}%
+  \renewcommand{\footrulewidth}{0pt}%
+  \fancyhead[L]{\smash{\raisebox{-1.2ex}{\parbox{\textwidth}{\scriptsize
+    2026 IEEE International Conference on Biomedical Engineering, Computer and Information Technology for Health (BECITHCON)\\
+    04-05 September 2026, Department of EEE, International University of Business Agriculture and Technology (IUBAT), Uttara, Dhaka-1230, Bangladesh}}}}%
+  \fancyfoot[L]{\smash{\raisebox{1.2ex}{\parbox{\textwidth}{\scriptsize
+    979-8-3195-3812-3/26/\$31.00~\copyright2026 IEEE}}}}%
+}
 \def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
     T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
 
@@ -16,14 +32,23 @@
 
 \title{SENTINEL: Organ-System Decomposition for Robust and Interpretable
 Early Warning of Sepsis in the ICU}
-
-\author{\IEEEauthorblockN{Anonymous Author(s)}
-\IEEEauthorblockA{\textit{Affiliation} \\
-City, Country \\
-email}
+\author{%
+\IEEEauthorblockN{Md Sazzad Siddique\IEEEauthorrefmark{1},
+Rezuan Islam\IEEEauthorrefmark{2},
+Md.\ Mashrurul Haque\IEEEauthorrefmark{2},
+Konak Mozumder\IEEEauthorrefmark{3},
+Md Saidul Islam Arif\IEEEauthorrefmark{2}}
+\IEEEauthorblockA{%
+\IEEEauthorrefmark{1}\textit{Information Technology Department, Incepta Pharmaceuticals Ltd.}, Dhaka, Bangladesh \\
+\IEEEauthorrefmark{2}\textit{University of Wales Trinity Saint David}, London, United Kingdom \\
+\IEEEauthorrefmark{3}\textit{American International University-Bangladesh}, Dhaka, Bangladesh \\[0.4ex]
+sazzadsiddique@inceptapharma.com, 2429105@student.uwtsd.ac.uk, 2435257@student.uwtsd.ac.uk, \\
+20-43749-2@student.aiub.edu, 2428155@student.uwtsd.ac.uk}
 }
 
 \maketitle
+\thispagestyle{becithconfirst}
+\pagestyle{empty}
 
 \begin{abstract}
 Early warning of ICU sepsis improves outcomes, yet the strongest deep models are
@@ -45,9 +70,12 @@ missingness-aware training. The decomposition also yields per-organ risk
 attribution---which system is deteriorating---and trains by federated averaging
 across non-IID care units at a quantified privacy cost. With the MIMIC-trained
 models \emph{frozen}, we externally validate on a second database (eICU; 122{,}798
-stays, 208 hospitals): discrimination transfers (AUROC retained) and the federated
-privacy cost replicates across genuine institutions ($-0.089$ vs.\ $-0.091$ AUPRC),
-while the missing-signal advantage attenuates but stays in the decomposed model's
+stays, 208 hospitals): the decomposed model keeps the best external AUPRC (0.123)
+but---we state this prominently---the \emph{weakest} external AUROC of the four
+supervised models (0.658 vs.\ 0.677--0.702), so its external edge is
+AUPRC-specific and not a general discrimination win. The federated privacy cost
+replicates across genuine institutions ($-0.089$ vs.\ $-0.091$ AUPRC), and the
+missing-signal advantage attenuates but stays in the decomposed model's
 favor. We also report a principled null: cooperative multi-agent RL adds no benefit
 (centralized MAPPO $\approx$ independent IPPO), as expected when alerting does not
 perturb the patient. All numbers carry bootstrap CIs, and the pipeline is fully
@@ -166,6 +194,50 @@ coordination. \textbf{Federated.} We partition training data into the eight admi
 care units with sufficient volume (genuinely non-IID; e.g.\ MICU ${\sim}46\%$ vs.\ neuro
 ${\sim}14\%$ ever-septic) and train a shared model by FedAvg \cite{mcmahan2017fedavg}
 without pooling data, holding out one unit (CVICU) as an external site.
+
+\subsection{Architecture and hyperparameters}
+\label{subsec:hyper}
+Every sequence model here is a \emph{single-layer, causal} GRU with a linear
+per-hour logit head, so the score at hour $t$ depends only on hours $\leq t$---no
+look-ahead by construction. SENTINEL-Risk is six independent GRUs of 48 hidden
+units, one per organ, each reading that organ's features plus the shared context,
+with \emph{no} parameters shared across organs; the team logit is their
+element-wise maximum. GRU-single, GRU-masked and each JointEnsemble-6 member use
+96 hidden units over the full feature vector, so the monolithic controls are not
+disadvantaged on capacity. Supervision is per-hour binary cross-entropy on the
+logits, positively weighted by the empirical negative/positive ratio and masked
+over padded hours, with the target being onset within a $1$--$6$\,h lead window;
+optimization is Adam with early stopping on validation AUPRC. SENTINEL-Alarm is a
+separate GRU actor--critic over the six organ risks plus alert history, trained by
+PPO. Table~\ref{tab:hyper} gives the full settings.
+
+\begin{table}[t]
+\caption{Architecture and training hyperparameters (fixed on MIMIC, reused
+unchanged on eICU). All GRUs are single-layer and causal; FP32, one 4\,GB GPU.}
+\label{tab:hyper}
+\centering\footnotesize\setlength{\tabcolsep}{4pt}
+\begin{tabular}{ll}
+\toprule
+Component / setting & Value \\
+\midrule
+SENTINEL-Risk heads & $6\times$ GRU(48) + linear, unshared \\
+GRU-single, GRU-masked & GRU(96) + linear, full vector \\
+JointEnsemble-6 member & GRU(96) + linear, joint vector \\
+SENTINEL-Alarm & GRU(64) actor, critic width 128 \\
+\midrule
+Supervised loss & pos-weighted BCE, padding masked \\
+Label window & onset within 1--6\,h \\
+Optimizer / LR & Adam / $10^{-3}$ (PPO $3{\times}10^{-4}$) \\
+Batch (episodes) & 256 heads, 64 baselines, 128 PPO \\
+Max epochs / updates & 40 heads, 25 baselines, 80 PPO \\
+Early stopping & val.\ AUPRC, patience 5 \\
+PPO & clip 0.2, $\gamma$ 0.99, GAE $\lambda$ 0.95, \\
+ & entropy 0.01, value 0.5, clip-norm 1.0 \\
+Organ-block dropout & $p{=}0.5$ (GRU-masked only) \\
+Seeds & 3--5 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \section{Experimental Setup}
 Splits are temporal by anchor-year group (train 2008--2016 / val 2017--2019 / test
@@ -335,7 +407,12 @@ independent (IPPO) critic (test AUPRC 0.063 vs.\ 0.066, overlapping CIs; unmoved
 $5\times$ training). This is principled, not a failure: under exogenous alerting
 dynamics no agent perturbs the environment, so a centralized critic has nothing to
 coordinate---and an action-history-conditioned actor matched the observation-only
-policy, justifying the simplification.
+policy, justifying the simplification. The clinical consequence is concrete: an
+alerting system of this kind needs no centralized critic and no inter-agent
+communication at inference, so each organ head can be trained, audited, revised,
+or---when its signal is unavailable---dropped independently at the bedside, and a
+site deploying SENTINEL can do so without the coupling and compute that
+cooperative machinery would add for no measured benefit.
 
 \subsection{Federated privacy cost}
 Across eight non-IID care units, FedAvg reaches AUPRC 0.121 (test) / 0.237 (held-out
@@ -416,6 +493,25 @@ model on top---shrinks once the baselines lose their signal to domain shift, an 
 only a genuine second database could expose. The honest takeaway is that
 \emph{structure}, not \emph{coordination}, is the useful inductive bias.
 
+\textbf{Where the external evidence is weakest.} The decomposition's external
+advantage is AUPRC-specific and we do not want that read as a general win. On
+eICU it holds the best AUPRC (0.123) but the \emph{lowest} AUROC of the four
+supervised models (0.658 vs.\ 0.677--0.702): it ranks the highest-risk hours
+better---which is what an alerting system operating at a fixed alarm budget is
+actually scored on---while ranking the full hour population slightly worse. A
+deployment decision that weights global ranking, or that expects to re-threshold
+freely, should prefer the monolith or the joint ensemble; one that fixes an alarm
+budget should prefer the decomposition. Closing the AUROC gap---plausibly by
+calibrating the organ heads and \emph{learning} their combination instead of
+taking a hard maximum---is the clearest open item this work leaves.
+
+\textbf{Is federation worth its cost?} On real hospitals FedAvg costs $-0.089$
+AUPRC, which is over half the centralized model's headroom above no-skill
+($0.089$ of $0.161$). That is a substantial price, not a footnote: federation is
+worth paying for where pooling records is legally impossible, and our results say
+to centralize wherever a data-use agreement permits it. The contribution is the
+\emph{quantified} cost---feasibility alone would have been the misleading claim.
+
 \section{Limitations}
 External validation on eICU and federation across real hospitals address the
 single-source and simulated-site limitations of an earlier draft, but limitations
@@ -427,17 +523,30 @@ robustness advantage, large internally, attenuates under domain shift. Labels ar
 retrospective and the escalation action is a proxy for real clinical response; the
 internal test set has a few hundred positive episodes, so we lean on external splits
 and CIs. The federated study uses a single shared model; federating the organ heads is
-future work.
+future work. Both databases are retrospective: the decisive test---a prospective,
+silent-mode deployment measuring whether attributable alerts actually change
+clinician behaviour and patient outcomes---remains future work, and nothing
+reported here substitutes for it.
 
 \section{Reproducibility and Ethics}
 The pipeline is config-driven with fixed seeds; cohort, labels, features, training,
-evaluation, and figures regenerate end-to-end, and unit tests cover the Sepsis-3
-derivation, the reward, leakage, the MARL gates, and---for the external study---the
-eICU harmonization and the frozen-model invariant (no gradient updates on external
-data). An anonymized code and analysis mirror is available at
-\url{https://anonymous.4open.science/r/sentinel-1025680}. MIMIC-IV and eICU are both
-credentialed under PhysioNet data-use agreements; no raw or derived row-level data is
-shared.
+evaluation, and figures regenerate end-to-end from one command sequence. We state
+exactly what is accessible. The repository contains the complete source package
+(cohort construction and the Sepsis-3 derivation, the organ feature builder, the
+per-organ risk heads and every baseline, the PPO alarm policy, the FedAvg
+trainer, the eICU harmonization, the organ-blinding harness, and the figure
+scripts); the YAML configuration files that fix every choice reported here
+(inclusion criteria and site partition, antibiotic list, item-ID map, feature
+manifest, label windows, and the MARL/PPO hyperparameters of
+Sec.~\ref{subsec:hyper}); the CLI entry points that regenerate each table and
+figure; and the test suite covering the Sepsis-3 derivation, the reward, leakage,
+the MARL gates, the eICU harmonization, and the frozen-model invariant (no
+gradient updates on external data). What is \emph{not} shared is data: MIMIC-IV
+and eICU are credentialed under PhysioNet data-use agreements, so no raw or
+derived row-level records---and no trained weights, which are fit on them---are
+distributed; a credentialed user regenerates both by running the pipeline. Code
+and analysis:
+\url{https://github.com/MDSAZZADSIDDIQUE/sentinel}.
 
 \section{Conclusion}
 Organ-system decomposition gives an ICU early-warning model that matches or beats a
